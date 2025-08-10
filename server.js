@@ -1,20 +1,27 @@
+
 // server.js
+// Multiplayer Snake — Redis adapter destekli, ölçeklenebilir Socket.IO server
+
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 
+// Redis adapter (yatay ölçek)
+const { createAdapter } = require('@socket.io/redis-adapter');
+const { Redis } = require('ioredis');
+
 const PORT = process.env.PORT || 3000;
 
 /* ------------ Oyun Ayarları ------------ */
-const ROUND_DURATION = 300;   // sn
+const ROUND_DURATION = 300;   // saniye
 const GRID = 20;
 const W = 800 / GRID;         // 40
 const H = 600 / GRID;         // 30
-const TICK_MS = 80;           // 12.5 Hz tick
-const BROADCAST_EVERY = 2;    // ~6.25 Hz yayın (lag azalır)
-const INPUT_MIN_MS = 50;      // input rate limit
+const TICK_MS = 80;           // ~12.5 Hz tick
+const BROADCAST_EVERY = 2;    // ~6.25 Hz yayın (volatile)
+const INPUT_MIN_MS = 50;      // input rate limit (ms)
 
 /* ------------ Express & Socket.IO ------ */
 const app = express();
@@ -27,20 +34,48 @@ const io = new Server(server, {
   maxHttpBufferSize: 1e6
 });
 
+// Redis adapter kurulum (varsa)
+const REDIS_URL = process.env.REDIS_URL; // rediss://default:PASS@HOST:PORT
+if (REDIS_URL) {
+  const pub = new Redis(REDIS_URL, {
+    maxRetriesPerRequest: null,
+    enableReadyCheck: true,
+    retryStrategy: (times) => Math.min(times * 200, 2000),
+  });
+  const sub = new Redis(REDIS_URL, {
+    maxRetriesPerRequest: null,
+    enableReadyCheck: true,
+    retryStrategy: (times) => Math.min(times * 200, 2000),
+  });
+
+  io.adapter(createAdapter(pub, sub));
+  pub.on('ready', () => console.log('[Redis] pub ready'));
+  sub.on('ready', () => console.log('[Redis] sub ready'));
+  pub.on('error', (e) => console.error('[Redis pub error]', e.message));
+  sub.on('error', (e) => console.error('[Redis sub error]', e.message));
+
+  const closeRedis = async () => { try{await pub.quit();}catch{} try{await sub.quit();}catch{} };
+  process.on('SIGTERM', closeRedis);
+  process.on('SIGINT', closeRedis);
+} else {
+  console.warn('REDIS_URL tanımlı değil; tek instance modunda çalışıyor.');
+}
+
+/* ------------ Statik dosyalar ---------- */
 app.use(express.static(path.join(__dirname)));
-app.get('/', (req,res)=>res.sendFile(path.join(__dirname, 'client.html')));
+app.get('/', (req,res)=> res.sendFile(path.join(__dirname,'client.html')));
 
 /* ------------ Highscore API ------------ */
-const HS_FILE = path.join(__dirname, 'highscores.json');
-function loadHS(){ try { return JSON.parse(fs.readFileSync(HS_FILE,'utf8')||'[]'); } catch { return []; } }
-function saveHS(arr){ try { fs.writeFileSync(HS_FILE, JSON.stringify(arr.slice(0,100),null,2)); } catch {} }
+const HS_FILE = path.join(__dirname,'highscores.json');
+function loadHS(){ try{ return JSON.parse(fs.readFileSync(HS_FILE,'utf8')||'[]'); } catch{ return []; } }
+function saveHS(arr){ try{ fs.writeFileSync(HS_FILE, JSON.stringify(arr.slice(0,100),null,2)); } catch{} }
 app.get('/highscores', (req,res)=> res.json(loadHS().slice(0,100)));
 
 /* ------------ Durum / Eşleşme ---------- */
 const activeUsers = new Map(); // socket.id -> {nick, ip, lastInputTs}
 function canUseNick(nick, ip){
   for (const {nick:n, ip:uip} of activeUsers.values()){
-    if (n===nick && uip!==ip) return false;
+    if (n===nick && uip!==ip) return false; // aynı nick başka IP’deyse engelle
   }
   return true;
 }
@@ -55,7 +90,8 @@ io.on('connection', (socket)=>{
     if (!nick) return socket.emit('nick_error','Kullanıcı adı boş olamaz!');
     if (nick.length>15) return socket.emit('nick_error','Kullanıcı adı en fazla 15 karakter olabilir.');
     if (!canUseNick(nick, ip)) return socket.emit('nick_error','Bu kullanıcı adı kullanılıyor.');
-    activeUsers.set(socket.id, { nick, ip, lastInputTs: 0 });
+
+    activeUsers.set(socket.id, {nick, ip, lastInputTs:0});
     enqueueForMatch(socket, nick, ip);
   });
 
@@ -69,8 +105,8 @@ io.on('connection', (socket)=>{
     if (!dir) return;
     const u = activeUsers.get(socket.id);
     const now = Date.now();
-    if (u) {
-      if (now - u.lastInputTs < INPUT_MIN_MS) return; // rate-limit
+    if (u){
+      if (now - u.lastInputTs < INPUT_MIN_MS) return; // rate limit
       u.lastInputTs = now;
     }
     const g = findGameBySocket(socket.id); if (!g || !g.loopStarted) return;
@@ -91,18 +127,24 @@ io.on('connection', (socket)=>{
   });
 
   socket.on('disconnect', ()=>{
+    // Kuyruktaysa çıkar
     const i = waitingQueue.findIndex(w=>w.socketId===socket.id);
     if (i>=0){ const w = waitingQueue.splice(i,1)[0]; if (w.botTimer) clearTimeout(w.botTimer); }
+
+    // Oyundaysa bitir
     const g = findGameBySocket(socket.id);
     if (g) endGame(g, socket.id===g.p1Id ? 'p2' : 'p1', 'disconnect');
+
     activeUsers.delete(socket.id);
   });
 });
 
-/* ---- İnsan öncelikli eşleşme + 3 sn bekleme ---- */
+/* ---- İnsan öncelikli eşleşme + 3sn bot bekleme ---- */
 function enqueueForMatch(socket, nick, ip){
-  if (trySwapIntoBotGame(socket, nick)) return; // başlamamış bot maçına insanı al
+  // Başlamamış bot maçına yeni insanı sok (swap)
+  if (trySwapIntoBotGame(socket, nick)) return;
 
+  // Bekleyen varsa eşleştir
   const idx = waitingQueue.findIndex(w=>w.socketId!==socket.id);
   if (idx>=0){
     const w = waitingQueue.splice(idx,1)[0];
@@ -111,6 +153,7 @@ function enqueueForMatch(socket, nick, ip){
     return;
   }
 
+  // Kimse yoksa kuyruğa al ve 3sn sonra botla başlat
   const entry = { socketId: socket.id, nick, ip, isBot:false, botTimer:null };
   waitingQueue.push(entry);
   entry.botTimer = setTimeout(()=>{
@@ -119,7 +162,7 @@ function enqueueForMatch(socket, nick, ip){
       waitingQueue.splice(i,1);
       createGame({ p1: entry, p2: { socketId:'BOT_'+Date.now(), nick:'BOT', ip:'-', isBot:true } });
     }
-  }, 3000); // <<< 3 saniye
+  }, 3000);
 }
 
 function trySwapIntoBotGame(socket, nick){
@@ -158,7 +201,7 @@ function findGameBySocket(sid){
   return null;
 }
 
-/* ---- Oyun Kurulumu ---- */
+/* ------------ Oyun Kurulumu ------------ */
 function createGame({p1, p2}){
   const roomId = 'R'+Math.random().toString(36).slice(2,9);
   const s1 = io.sockets.sockets.get(p1.socketId);
@@ -199,6 +242,7 @@ function createGame({p1, p2}){
   if (g.p1Id) g.readyFlags[g.p1Id]=false;
   if (!g.p2Id) g.readyFlags['BOT']=true; else g.readyFlags[g.p2Id]=false;
 
+  // İnsan-insan: force=false, bot varsa force=true
   g.startSafetyTimer = setTimeout(()=> maybeStartGameLoop(g, g.bot ? true : false), 4000);
 }
 
@@ -231,7 +275,7 @@ function randEmptyCell(p1,p2){
 }
 function pickNextSpecial(...opts){ return opts[(Math.random()*opts.length)|0]; }
 
-/* ---- Oyun Döngüsü ---- */
+/* ------------ Oyun Döngüsü ------------ */
 function maybeStartGameLoop(g, force=false){
   if (g.loopStarted) return;
   const allReady = force || Object.values(g.readyFlags).every(v=>v===true);
@@ -267,7 +311,6 @@ function maybeStartGameLoop(g, force=false){
 function tick(g){
   const S = g.state;
 
-  // Bot yapay zekâsı
   if (g.bot){
     const d = botThink(S);
     if (d) setDir(S.p2, d);
@@ -279,8 +322,8 @@ function tick(g){
   const p1Dead = isDead(S.p1, S.p2);
   const p2Dead = isDead(S.p2, S.p1);
 
-  handleFood(S, 'p1');
-  handleFood(S, 'p2');
+  handleFood(S,'p1');
+  handleFood(S,'p2');
 
   if (p1Dead || p2Dead){
     if (p1Dead && p2Dead) endGame(g,'draw','crash');
@@ -289,7 +332,7 @@ function tick(g){
     return;
   }
 
-  // Yayın (volatile -> paket kaybı sorun olmaz)
+  // Yayın (volatile): paket kaybı sorun olmaz, bir sonraki frame’de telafi edilir
   S._bc = (S._bc||0) + 1;
   if (S._bc % BROADCAST_EVERY === 0){
     io.to(g.roomId).volatile.emit('state', {
@@ -304,10 +347,10 @@ function tick(g){
   }
 }
 
-/* ---- Mekanikler ---- */
+/* ------------ Mekanikler --------------- */
 function setDir(s, dir){
   const nx = Math.sign(dir.x), ny = Math.sign(dir.y);
-  if (s.dir.x + nx === 0 && s.dir.y + ny === 0) return; // tersine dönmesin
+  if (s.dir.x + nx === 0 && s.dir.y + ny === 0) return; // 180° dönüş olmasın
   s.dir = {x:nx, y:ny};
 }
 function stepSnake(s){
@@ -341,16 +384,16 @@ function handleFood(S, who){
   }
 }
 
-/* ---- Bot ---- */
+/* ------------ Basit Bot ---------------- */
 function botThink(S){
-  const h = S.p2.body[0];
-  const t = S.sfood || S.food;
-  const cand = [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}];
+  const h=S.p2.body[0];
+  const t=S.sfood || S.food;
+  const cand=[{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}];
   let best=null, bestDist=Infinity;
   for (const d of cand){
     const nx=h.x+d.x, ny=h.y+d.y;
     if (isPointDead({x:nx,y:ny}, S.p2, S.p1)) continue;
-    const dist = Math.abs(nx-t.x) + Math.abs(ny-t.y);
+    const dist=Math.abs(nx-t.x) + Math.abs(ny-t.y);
     if (dist<bestDist){ bestDist=dist; best=d; }
   }
   return best || S.p2.dir;
@@ -362,7 +405,7 @@ function isPointDead(h, self, other){
   return false;
 }
 
-/* ---- Bitiş & Skor ---- */
+/* ------------ Bitiş & Skor ------------- */
 function endGame(g, winner){
   if (!g || g.state.over) return;
   g.state.over = true;
@@ -392,7 +435,7 @@ function endGame(g, winner){
   });
 }
 
-/* ---- Rematch ---- */
+/* ------------ Rematch ------------------ */
 function tryStartRematch(g){
   const need=[]; if (g.p1Id) need.push(g.p1Id); if (g.p2Id) need.push(g.p2Id);
   const ok = need.every(id=>g.rematchReady[id]);
@@ -416,5 +459,5 @@ function tryStartRematch(g){
   g.startSafetyTimer = setTimeout(()=> maybeStartGameLoop(g, g.bot ? true : false), 4000);
 }
 
-/* ---- Yardımcı ---- */
+/* ------------ Sunucu ------------------- */
 server.listen(PORT, ()=> console.log('Server listening on', PORT));
