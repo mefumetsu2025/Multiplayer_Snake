@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Multiplayer Snake</title>
 <style>
   :root{ --page:#1a1d1f; --arena:#2a2f34; --panel:#111418; --text:#f5f7fa; --badge:#ffffff14; }
@@ -19,7 +19,7 @@
   .error{ color:#ff6b6b; font-size:14px; min-height:18px; margin-top:6px; }
 
   /* Game */
-  #gameScreen{ display:none; padding:12px 16px 24px }
+  #gameScreen{ display:none; padding:12px 16px 20px }
   #hud{ width:min(860px,95vw); margin:0 auto 10px; background:#111418; border-radius:12px; padding:10px 14px; box-shadow:0 6px 24px #0006; display:flex; justify-content:center; gap:10px; font-weight:700; }
   .badge{ padding:6px 10px; border-radius:10px; background:#ffffff14; }
   #stageWrap{ position:relative; width:100%; display:flex; justify-content:center; }
@@ -27,9 +27,6 @@
   #overlay{ position:absolute; inset:0; display:none; align-items:center; justify-content:center; pointer-events:auto; }
   #overlay .box{ background:#12161aee; border:1px solid #ffffff22; padding:20px; border-radius:14px; text-align:center; }
   .btn-row{ display:flex; gap:8px; margin-top:10px; justify-content:center; }
-
-  /* Countdown */
-  #countdown { position:absolute; inset:0; display:none; align-items:center; justify-content:center; font-size:72px; font-weight:800; color:white; text-shadow:0 0 8px black; pointer-events:none; }
 
   /* Top100 Modal */
   #hsModal{ position:fixed; inset:0; background:rgba(0,0,0,.7); display:none; align-items:center; justify-content:center; z-index:10; }
@@ -41,36 +38,9 @@
   #hsList .name{ flex:1; text-align:left; font-weight:600; }
   #hsList .score{ width:48px; text-align:left; opacity:.9; }
 
-  /* D-pad (tek yüzey, mobil) */
-  #dpadWrap{
-    display:none; position:fixed; left:50%; transform:translateX(-50%);
-    bottom:18px; z-index:8; user-select:none; touch-action:none;
-  }
-  #dpad{
-    position:relative; width:180px; height:180px; border-radius:20px;
-    background:#0e1114b0; border:1px solid #ffffff22; backdrop-filter:blur(6px);
-    box-shadow:0 8px 24px #0008;
-  }
-  .arrow{
-    position:absolute; display:flex; align-items:center; justify-content:center;
-    color:#e9eef5; font-weight:800; font-size:22px; opacity:.9;
-    background:#ffffff14; border:1px solid #ffffff22; border-radius:12px;
-  }
-  .arrow.up{    left:66px; top:10px;   width:48px; height:56px; }
-  .arrow.down{  left:66px; bottom:10px;width:48px; height:56px; }
-  .arrow.left{  top:66px; left:10px;   width:56px; height:48px; }
-  .arrow.right{ top:66px; right:10px;  width:56px; height:48px; }
-  #ring{
-    position:absolute; left:50%; top:50%; width:120px; height:120px; margin:-60px 0 0 -60px;
-    border-radius:50%; border:1px dashed #ffffff30;
-  }
-  #knob{
-    position:absolute; left:50%; top:50%; width:50px; height:50px; margin:-25px 0 0 -25px;
-    border-radius:50%; background:#ffffff26; border:2px solid #ffffff55;
-    transition:transform .08s ease;
-  }
-  @media (pointer:coarse){ #dpadWrap{ display:block; } }
-  @media (pointer:fine){ #dpadWrap{ display:none !important; } }
+  /* Mobil yön tuşları */
+  #controls{ display:none; position:fixed; bottom:10px; left:0; width:100%; display:flex; justify-content:center; gap:40px; }
+  .ctrl-btn{ width:60px; height:60px; font-size:28px; background:#333; color:white; border-radius:12px; border:none; display:flex; align-items:center; justify-content:center; }
 </style>
 </head>
 <body>
@@ -88,14 +58,12 @@
 <!-- GAME -->
 <section id="gameScreen">
   <div id="hud">
-    <div class="badge">Beyaz ⚪ <span id="s1">0</span></div>
+    <div class="badge">Beyaz ⬤ <span id="s1">0</span></div>
     <div class="badge">Süre ⏱ <span id="tm">300</span>s</div>
-    <div class="badge">Gri ◍ <span id="s2">0</span></div>
+    <div class="badge">Gri ⬤ <span id="s2">0</span></div>
   </div>
-
   <div id="stageWrap">
     <canvas id="gameCanvas" width="800" height="600"></canvas>
-    <div id="countdown"></div>
     <div id="overlay">
       <div class="box">
         <h2 id="resultText">Sonuç</h2>
@@ -109,19 +77,19 @@
       </div>
     </div>
   </div>
-
-  <!-- Tek D-pad -->
-  <div id="dpadWrap" aria-label="Yön D-Pad">
-    <div id="dpad">
-      <div class="arrow up">▲</div>
-      <div class="arrow down">▼</div>
-      <div class="arrow left">◀</div>
-      <div class="arrow right">▶</div>
-      <div id="ring"></div>
-      <div id="knob"></div>
-    </div>
-  </div>
 </section>
+
+<!-- Mobil kontrol -->
+<div id="controls">
+  <div>
+    <button class="ctrl-btn" data-dir="up">▲</button>
+    <button class="ctrl-btn" data-dir="down">▼</button>
+  </div>
+  <div>
+    <button class="ctrl-btn" data-dir="left">◄</button>
+    <button class="ctrl-btn" data-dir="right">►</button>
+  </div>
+</div>
 
 <!-- Top100 Modal -->
 <div id="hsModal">
@@ -135,189 +103,106 @@
 <script src="/socket.io/socket.io.js"></script>
 <script>
 (()=> {
-  // Elements
-  const loginScreen=document.getElementById('loginScreen'),
-        nicknameInput=document.getElementById('nickname'),
-        loginError=document.getElementById('loginError'),
-        startBtn=document.getElementById('startBtn'),
-        gameScreen=document.getElementById('gameScreen'),
-        s1=document.getElementById('s1'), s2=document.getElementById('s2'), tm=document.getElementById('tm'),
-        canvas=document.getElementById('gameCanvas'), ctx=canvas.getContext('2d'),
-        overlay=document.getElementById('overlay'), resultText=document.getElementById('resultText'),
-        resultScore=document.getElementById('resultScore'), restartBtn=document.getElementById('restartBtn'),
-        newOpponentBtn=document.getElementById('newOpponentBtn'), waitInfo=document.getElementById('waitInfo'),
-        showHSBtn=document.getElementById('showHSBtn'),
-        countdown=document.getElementById('countdown'),
-        hsModal=document.getElementById('hsModal'), hsClose=document.getElementById('hsClose'), hsList=document.getElementById('hsList'),
-        dpadWrap=document.getElementById('dpadWrap'), dpad=document.getElementById('dpad'), ring=document.getElementById('ring'), knob=document.getElementById('knob');
+  const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+  const loginScreen = document.getElementById('loginScreen');
+  const nicknameInput = document.getElementById('nickname');
+  const loginError = document.getElementById('loginError');
+  const startBtn = document.getElementById('startBtn');
+  const gameScreen = document.getElementById('gameScreen');
+  const s1 = document.getElementById('s1'), s2 = document.getElementById('s2'), tm = document.getElementById('tm');
+  const canvas = document.getElementById('gameCanvas'); const ctx = canvas.getContext('2d');
+  const overlay = document.getElementById('overlay');
+  const resultText = document.getElementById('resultText'); const resultScore = document.getElementById('resultScore');
+  const restartBtn = document.getElementById('restartBtn'); const newOpponentBtn = document.getElementById('newOpponentBtn');
+  const waitInfo = document.getElementById('waitInfo');
+  const showHSBtn = document.getElementById('showHSBtn');
+  const hsModal = document.getElementById('hsModal'); const hsClose = document.getElementById('hsClose'); const hsList = document.getElementById('hsList');
+  const controls = document.getElementById('controls');
 
-  const BASE_W=800, BASE_H=600;
+  const BASE_W = 800, BASE_H = 600;
   function fitCanvas(){
-    const availW=Math.min(window.innerWidth*0.98,1200);
-    const availH=window.innerHeight*0.70; // d-pad'e yer
-    const scale=Math.min(availW/BASE_W, availH/BASE_H);
-    canvas.style.width=(BASE_W*scale)+'px';
-    canvas.style.height=(BASE_H*scale)+'px';
+    const availW = Math.min(window.innerWidth*0.98, 1200);
+    const availH = window.innerHeight * 0.80;
+    const scale = Math.min(availW/BASE_W, availH/BASE_H);
+    canvas.style.width  = (BASE_W*scale) + 'px';
+    canvas.style.height = (BASE_H*scale) + 'px';
   }
   window.addEventListener('resize', fitCanvas); fitCanvas();
 
-  const socket = io({ transports: ['websocket'] });
-
-  let myRole = 'p1'; // server'dan gelecek
-
-  // Login
+  const socket = io();
   startBtn.addEventListener('click', ()=>{
-    const nick=nicknameInput.value.trim();
-    if(!nick){ loginError.textContent='Kullanıcı adı boş olamaz!'; return; }
-    if(nick.length>15){ loginError.textContent='Kullanıcı adı en fazla 15 karakter olabilir.'; return; }
-    loginError.textContent='';
+    const nick = nicknameInput.value.trim();
+    if (!nick){ loginError.textContent = 'Kullanıcı adı boş olamaz!'; return; }
     socket.emit('set_nick', nick);
   });
-  socket.on('nick_error', msg=>loginError.textContent=msg);
+  socket.on('nick_error', msg=>{ loginError.textContent = msg; });
 
-  // Match start (rol bilgisi ile)
-  socket.on('match_start', data=>{
-    myRole = data.role || 'p1';
-
+  socket.on('match_start', (data)=>{
     loginScreen.style.display='none';
     gameScreen.style.display='block';
     overlay.style.display='none';
     waitInfo.style.display='none';
     s1.textContent='0'; s2.textContent='0'; tm.textContent=data.duration;
     fitCanvas();
-
-    if (window.matchMedia('(pointer: coarse)').matches) dpadWrap.style.display='block';
-    else dpadWrap.style.display='none';
-
-    startCountdown(()=> socket.emit('countdown_done') );
+    if(isMobile) controls.style.display='flex';
   });
 
-  socket.on('rematch_wait', rdy=>{
-    waitInfo.style.display = (rdy.p1 && rdy.p2) ? 'none' : 'block';
-  });
-
-  socket.on('state', st=>{
-    if(!st.over) tm.textContent=st.left;
-    s1.textContent=st.p1.score; s2.textContent=st.p2.score;
+  socket.on('state', (st)=>{
+    s1.textContent = st.p1.score;
+    s2.textContent = st.p2.score;
+    tm.textContent = st.left;
 
     const grid=20, W=BASE_W, H=BASE_H;
     ctx.clearRect(0,0,W,H);
     ctx.save(); ctx.strokeStyle='#ffffff'; ctx.lineWidth=4; ctx.strokeRect(2,2,W-4,H-4); ctx.restore();
+    if (st.food){ ctx.fillStyle='red'; ctx.fillRect(st.food.x*grid, st.food.y*grid, grid, grid); }
+    if (st.sfood){ ctx.fillStyle='gold'; ctx.fillRect(st.sfood.x*grid, st.sfood.y*grid, grid, grid); }
+    ctx.fillStyle='white'; for (const p of st.p1.body) ctx.fillRect(p.x*grid,p.y*grid,grid,grid);
+    ctx.fillStyle='grey';  for (const p of st.p2.body) ctx.fillRect(p.x*grid,p.y*grid,grid,grid);
 
-    if(st.food){ ctx.fillStyle='red'; ctx.fillRect(st.food.x*grid, st.food.y*grid, grid, grid); }
-    if(st.sfood){ ctx.fillStyle='gold'; ctx.fillRect(st.sfood.x*grid, st.sfood.y*grid, grid, grid); }
-
-    // P1: Beyaz
-    ctx.fillStyle='#fff';
-    for(const p of st.p1.body){
-      ctx.fillRect(p.x*grid,p.y*grid,grid,grid);
-      ctx.strokeStyle='#111'; ctx.lineWidth=1; ctx.strokeRect(p.x*grid+0.5,p.y*grid+0.5,grid-1,grid-1);
-    }
-    // P2: Gri
-    ctx.fillStyle='#9aa0a6';
-    for(const p of st.p2.body) ctx.fillRect(p.x*grid,p.y*grid,grid,grid);
-
-    if(st.over){
+    if (st.over){
       overlay.style.display='flex';
-      resultText.textContent = st.winner==='p1' ? ('Beyaz Kazandı!') : st.winner==='p2' ? ('Gri Kazandı!') : 'Berabere!';
-      resultScore.textContent = `Beyaz: ${st.p1.score} • Gri: ${st.p2.score}`;
-      dpadWrap.style.display='none';
-      knob.style.transform='translate(0px,0px)';
-      lastDir='stop';
+      resultText.textContent = st.winner==='p1' ? (st.n1+' Kazandı!') : st.winner==='p2' ? (st.n2+' Kazandı!') : 'Berabere!';
+      resultScore.textContent = `${st.n1}: ${st.p1.score} • ${st.n2}: ${st.p2.score}`;
+      controls.style.display='none';
     }
   });
 
-  // PC klavye: HANGİ rol isen o yılanı oynat; hem oklar hem WASD
   document.addEventListener('keydown', (e)=>{
-    const dir = keyToDir(e.key);
-    if (!dir) return;
-    socket.emit('input', { dir }); // server rolüne göre doğru yılana uygular
+    let dir=null;
+    if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){ dir=keyToDir(e.key); socket.emit('input',{for:'p1', dir}); }
+    else if (['w','a','s','d'].includes(e.key.toLowerCase())){ dir=keyToDir(e.key.toLowerCase()); socket.emit('input',{for:'p1', dir}); }
   });
   function keyToDir(key){
-    if (key==='ArrowUp'   || key==='w' || key==='W') return {x:0,y:-1};
-    if (key==='ArrowDown' || key==='s' || key==='S') return {x:0,y: 1};
-    if (key==='ArrowLeft' || key==='a' || key==='A') return {x:-1,y:0};
-    if (key==='ArrowRight'|| key==='d' || key==='D') return {x:1,y:0};
-    return null;
+    if (key==='ArrowUp'||key==='w') return {x:0,y:-1};
+    if (key==='ArrowDown'||key==='s') return {x:0,y: 1};
+    if (key==='ArrowLeft'||key==='a') return {x:-1,y:0};
+    if (key==='ArrowRight'||key==='d') return {x:1,y:0};
+    return {x:0,y:0};
   }
 
-  // D-pad tek yüzey (P1/P2 fark etmeksizin "benim yılanım")
-  const ringR=60, knobR=25, dead=8;
-  let dragging=false, lastDir='stop';
+  controls.querySelectorAll('.ctrl-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const dir = btn.dataset.dir;
+      if (dir==='up') socket.emit('input',{for:'p1', dir:{x:0,y:-1}});
+      if (dir==='down') socket.emit('input',{for:'p1', dir:{x:0,y:1}});
+      if (dir==='left') socket.emit('input',{for:'p1', dir:{x:-1,y:0}});
+      if (dir==='right') socket.emit('input',{for:'p1', dir:{x:1,y:0}});
+    });
+  });
 
-  dpad.addEventListener('pointerdown', (ev)=>{
-    dragging=true; dpad.setPointerCapture?.(ev.pointerId);
-    handlePad(ev); ev.preventDefault();
-  }, {passive:false});
-  window.addEventListener('pointermove', (ev)=>{ if(dragging) handlePad(ev); }, {passive:false});
-  window.addEventListener('pointerup', ()=>{
-    if(!dragging) return;
-    dragging=false; knob.style.transform='translate(0px,0px)';
-    lastDir='stop'; // stop göndermiyoruz; yılan akmaya devam eder
-  }, {passive:false});
-
-  function handlePad(ev){
-    const br=dpad.getBoundingClientRect();
-    const cx=br.left+br.width/2, cy=br.top+br.height/2;
-    const dx=ev.clientX-cx, dy=ev.clientY-cy;
-    const ax=Math.abs(dx), ay=Math.abs(dy);
-    const dist=Math.hypot(dx,dy);
-
-    // knob görseli
-    const max = ringR - knobR*0.6;
-    const ang = Math.atan2(dy,dx);
-    const clamp = Math.min(dist,max);
-    knob.style.transform=`translate(${Math.cos(ang)*clamp}px,${Math.sin(ang)*clamp}px)`;
-
-    // yön seç
-    let dir='stop';
-    if (dist>dead){
-      if (ax>ay) dir = dx>0 ? 'right' : 'left';
-      else       dir = dy>0 ? 'down'  : 'up';
-    }
-    if (dir!==lastDir){
-      lastDir=dir;
-      if(dir==='up')    socket.emit('input',{dir:{x:0,y:-1}});
-      if(dir==='down')  socket.emit('input',{dir:{x:0,y: 1}});
-      if(dir==='left')  socket.emit('input',{dir:{x:-1,y:0}});
-      if(dir==='right') socket.emit('input',{dir:{x:1,y:0}});
-    }
-  }
-
-  // Rematch / New opponent / Top100
   restartBtn.addEventListener('click', ()=>{ waitInfo.style.display='block'; socket.emit('rematch'); });
   newOpponentBtn.addEventListener('click', ()=>{ overlay.style.display='flex'; waitInfo.textContent='Yeni rakip aranıyor...'; waitInfo.style.display='block'; socket.emit('find_new'); });
+  showHSBtn.addEventListener('click', async ()=>{ await refreshHS(); hsModal.style.display='flex'; });
+  hsClose.addEventListener('click', ()=>{ hsModal.style.display='none'; });
+  hsModal.addEventListener('click', (e)=>{ if(e.target===hsModal) hsModal.style.display='none'; });
 
-  showHSBtn.addEventListener('click', async()=>{
+  async function refreshHS(){
     try{
-      const res=await fetch('/highscores');
-      const data=await res.json();
-      hsList.innerHTML=data.map((r,i)=>(
-        `<li><span class="rank">${i+1}.</span><span class="name">${escapeHtml(r.nick)}</span><span class="score">${r.score}</span></li>`
-      )).join('');
-      hsModal.style.display='flex';
+      const res = await fetch('/highscores');
+      const data = await res.json();
+      hsList.innerHTML = data.map((r,i)=>(`<li><span class="rank">${i+1}.</span><span class="name">${r.nick}</span><span class="score">${r.score}</span></li>`)).join('');
     }catch(e){}
-  });
-  hsClose.addEventListener('click', ()=>hsModal.style.display='none');
-  hsModal.addEventListener('click', e=>{ if(e.target===hsModal) hsModal.style.display='none'; });
-
-  function escapeHtml(s){return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
-
-  // Countdown
-  function startCountdown(cb){
-    let count=3;
-    countdown.style.display='flex';
-    countdown.textContent=count;
-    const int=setInterval(()=>{
-      count--;
-      if(count>0) countdown.textContent=count;
-      else if(count===0) countdown.textContent='Başla!';
-      else{
-        clearInterval(int);
-        countdown.style.display='none';
-        cb();
-      }
-    },1000);
   }
 })();
 </script>
