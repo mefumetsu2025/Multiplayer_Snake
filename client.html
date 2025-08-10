@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Multiplayer Snake</title>
 <style>
   :root{ --page:#1a1d1f; --arena:#2a2f34; --panel:#111418; --text:#f5f7fa; --badge:#ffffff14; }
@@ -28,45 +28,23 @@
   #overlay .box{ background:#12161aee; border:1px solid #ffffff22; padding:20px; border-radius:14px; text-align:center; }
   .btn-row{ display:flex; gap:8px; margin-top:10px; justify-content:center; }
 
-  /* Countdown */
-  #countdown { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:72px; font-weight:800; color:white; text-shadow:0 0 8px black; pointer-events:none; }
-
-  /* Mobile hint */
-  #mobileHint{ display:none; width:min(860px,95vw); margin:8px auto 0; font-size:14px; opacity:.85; text-align:center; }
-  @media (pointer:coarse){
-    #mobileHint{ display:block; }
-  }
-
   /* Top100 Modal */
   #hsModal{ position:fixed; inset:0; background:rgba(0,0,0,.7); display:none; align-items:center; justify-content:center; z-index:10; }
   #hsPanel{ position:relative; width:min(720px,92vw); max-height:80vh; overflow:auto; background:#0e1114; border:1px solid #ffffff22; border-radius:14px; box-shadow:0 10px 30px #000a; padding:14px 16px; }
   #hsClose{ position:absolute; top:8px; right:10px; border:0; background:transparent; color:#fff; font-size:22px; cursor:pointer; }
+
   #hsList{ list-style:none; padding-left:0; margin:0; }
   #hsList li{ display:flex; align-items:center; gap:8px; padding:3px 0; }
   #hsList .rank{ width:26px; text-align:right; opacity:.85; }
   #hsList .name{ flex:1; text-align:left; font-weight:600; }
   #hsList .score{ width:48px; text-align:left; opacity:.9; }
 
-  /* === Draggable mobile pads === */
-  .pad{
-    position:fixed; z-index:20; width:108px; height:108px;
-    display:grid; grid-template-columns:repeat(3,36px); grid-template-rows:repeat(3,36px); gap:0;
-    background:#0e1114aa; border:1px solid #ffffff22; border-radius:14px; backdrop-filter: blur(6px);
-    touch-action:none;
-  }
-  .pad .handle{
-    grid-column:1 / span 3; height:20px; line-height:20px; text-align:center;
-    font-size:14px; color:#cbd5e1; cursor:grab; user-select:none;
-    border-bottom:1px solid #ffffff1a;
-  }
-  .pad button{
-    border:0; margin:0; background:#ffffff18; color:#fff; font-size:18px; font-weight:700;
-    display:flex; align-items:center; justify-content:center; cursor:pointer;
-  }
-  .pad button:active{ background:#ffffff30; }
-  .pad .spacer{ background:transparent }
-  @media (pointer:fine){
-    .pad{ display:none; } /* masaüstünde gizle */
+  /* Mobil yön butonları */
+  #controls { display:none; position:fixed; bottom:20px; left:50%; transform:translateX(-50%); z-index:20; }
+  .ctrl-btn { width:60px; height:60px; font-size:28px; border-radius:12px; border:none; margin:4px; background:#ffffff22; color:white; }
+  @media (max-width:900px) {
+    #controls { display:flex; flex-direction:column; align-items:center; }
+    .ctrl-row { display:flex; justify-content:center; }
   }
 </style>
 </head>
@@ -79,23 +57,19 @@
     <input id="nickname" class="fld" type="text" placeholder="Kullanıcı adı (max 15)" maxlength="15">
     <div id="loginError" class="error"></div>
     <button id="startBtn" class="btn">Oyuna Başla</button>
-    <div style="opacity:.8; margin-top:8px; font-size:14px;">Uygunsuz/müstehcen adlar engellenir. (Aynı IP aynı adı tekrar kullanabilir)</div>
   </div>
 </section>
 
 <!-- GAME -->
 <section id="gameScreen">
   <div id="hud">
-    <div class="badge">Beyaz ⚪ <span id="s1">0</span></div>
+    <div class="badge">Beyaz ⬤ <span id="s1">0</span></div>
     <div class="badge">Süre ⏱ <span id="tm">300</span>s</div>
-    <div class="badge">Gri ◍ <span id="s2">0</span></div>
+    <div class="badge">Gri ⬤ <span id="s2">0</span></div>
   </div>
-
-  <div id="mobileHint">📱 İpucu: <b>Sol yarı = Beyaz</b>, <b>sağ yarı = Gri</b>. Ok panellerini <b>≡</b> tutamacından sürükleyerek istediğin yere taşıyabilirsin.</div>
 
   <div id="stageWrap">
     <canvas id="gameCanvas" width="800" height="600"></canvas>
-    <div id="countdown"></div>
     <div id="overlay">
       <div class="box">
         <h2 id="resultText">Sonuç</h2>
@@ -111,6 +85,16 @@
   </div>
 </section>
 
+<!-- Mobil Kontrol -->
+<div id="controls">
+  <div class="ctrl-row"><button class="ctrl-btn" id="btnUp">▲</button></div>
+  <div class="ctrl-row">
+    <button class="ctrl-btn" id="btnLeft">◀</button>
+    <button class="ctrl-btn" id="btnDown">▼</button>
+    <button class="ctrl-btn" id="btnRight">▶</button>
+  </div>
+</div>
+
 <!-- Top100 Modal -->
 <div id="hsModal">
   <div id="hsPanel">
@@ -120,211 +104,114 @@
   </div>
 </div>
 
-<!-- Draggable pads -->
-<div id="padP1" class="pad" style="left:12px; bottom:12px;">
-  <div class="handle">≡ Beyaz</div>
-  <div class="spacer"></div><button data-dx="0" data-dy="-1">▲</button><div class="spacer"></div>
-  <button data-dx="-1" data-dy="0">◀</button><div class="spacer"></div><button data-dx="1" data-dy="0">▶</button>
-  <div class="spacer"></div><button data-dx="0" data-dy="1">▼</button><div class="spacer"></div>
-</div>
-
-<div id="padP2" class="pad" style="right:12px; bottom:12px;">
-  <div class="handle">≡ Gri</div>
-  <div class="spacer"></div><button data-dx="0" data-dy="-1">▲</button><div class="spacer"></div>
-  <button data-dx="-1" data-dy="0">◀</button><div class="spacer"></div><button data-dx="1" data-dy="0">▶</button>
-  <div class="spacer"></div><button data-dx="0" data-dy="1">▼</button><div class="spacer"></div>
-</div>
-
 <script src="/socket.io/socket.io.js"></script>
 <script>
 (()=> {
-  const loginScreen=document.getElementById('loginScreen'),
-        nicknameInput=document.getElementById('nickname'),
-        loginError=document.getElementById('loginError'),
-        startBtn=document.getElementById('startBtn'),
-        gameScreen=document.getElementById('gameScreen'),
-        s1=document.getElementById('s1'), s2=document.getElementById('s2'), tm=document.getElementById('tm'),
-        canvas=document.getElementById('gameCanvas'), ctx=canvas.getContext('2d'),
-        overlay=document.getElementById('overlay'), resultText=document.getElementById('resultText'),
-        resultScore=document.getElementById('resultScore'), restartBtn=document.getElementById('restartBtn'),
-        newOpponentBtn=document.getElementById('newOpponentBtn'), waitInfo=document.getElementById('waitInfo'),
-        showHSBtn=document.getElementById('showHSBtn'), hsModal=document.getElementById('hsModal'),
-        hsClose=document.getElementById('hsClose'), hsList=document.getElementById('hsList'),
-        countdown=document.getElementById('countdown');
+  const loginScreen = document.getElementById('loginScreen');
+  const nicknameInput = document.getElementById('nickname');
+  const loginError = document.getElementById('loginError');
+  const startBtn = document.getElementById('startBtn');
 
-  const BASE_W=800, BASE_H=600;
+  const gameScreen = document.getElementById('gameScreen');
+  const s1 = document.getElementById('s1'), s2 = document.getElementById('s2'), tm = document.getElementById('tm');
+  const canvas = document.getElementById('gameCanvas'); const ctx = canvas.getContext('2d');
+  const overlay = document.getElementById('overlay');
+  const resultText = document.getElementById('resultText'); const resultScore = document.getElementById('resultScore');
+  const restartBtn = document.getElementById('restartBtn'); const newOpponentBtn = document.getElementById('newOpponentBtn'); const waitInfo = document.getElementById('waitInfo');
+  const showHSBtn = document.getElementById('showHSBtn');
+
+  const hsModal = document.getElementById('hsModal'); const hsClose = document.getElementById('hsClose'); const hsList = document.getElementById('hsList');
+
+  const controls = document.getElementById('controls');
+  const btnUp = document.getElementById('btnUp'), btnDown = document.getElementById('btnDown'), btnLeft = document.getElementById('btnLeft'), btnRight = document.getElementById('btnRight');
+
+  const BASE_W = 800, BASE_H = 600;
   function fitCanvas(){
-    const availW=Math.min(window.innerWidth*0.98,1200);
-    const availH=window.innerHeight*0.80;
-    const scale=Math.min(availW/BASE_W, availH/BASE_H);
-    canvas.style.width=(BASE_W*scale)+'px';
-    canvas.style.height=(BASE_H*scale)+'px';
+    const availW = Math.min(window.innerWidth*0.98, 1200);
+    const availH = window.innerHeight * 0.80;
+    const scale = Math.min(availW/BASE_W, availH/BASE_H);
+    canvas.style.width  = (BASE_W*scale) + 'px';
+    canvas.style.height = (BASE_H*scale) + 'px';
   }
-  window.addEventListener('resize',fitCanvas); fitCanvas();
+  window.addEventListener('resize', fitCanvas); fitCanvas();
 
-  const socket=io();
+  const socket = io();
+
   startBtn.addEventListener('click', ()=>{
-    const nick=nicknameInput.value.trim();
-    if(!nick){loginError.textContent='Kullanıcı adı boş olamaz!';return;}
-    if(nick.length>15){loginError.textContent='Kullanıcı adı en fazla 15 karakter olabilir.';return;}
+    const nick = nicknameInput.value.trim();
+    if (!nick){ loginError.textContent = 'Kullanıcı adı boş olamaz!'; return; }
+    if (nick.length > 15){ loginError.textContent = 'Kullanıcı adı en fazla 15 karakter olabilir.'; return; }
     loginError.textContent='';
     socket.emit('set_nick', nick);
   });
-  socket.on('nick_error', msg=>loginError.textContent=msg);
+  socket.on('nick_error', msg=>{ loginError.textContent = msg; });
 
-  socket.on('match_start', data=>{
+  socket.on('match_start', (data)=>{
     loginScreen.style.display='none';
     gameScreen.style.display='block';
     overlay.style.display='none';
     waitInfo.style.display='none';
     s1.textContent='0'; s2.textContent='0'; tm.textContent=data.duration;
     fitCanvas();
-    startCountdown(()=>{ socket.emit('countdown_done'); });
+    if(window.innerWidth < 900) controls.style.display='flex';
   });
 
-  socket.on('rematch_wait', rdy=>{
-    waitInfo.style.display = (rdy.p1 && rdy.p2) ? 'none' : 'block';
-  });
+  socket.on('rematch_wait', (rdy)=>{ waitInfo.style.display = (rdy.p1 && rdy.p2) ? 'none' : 'block'; });
 
-  socket.on('state', st=>{
-    if(!st.over){
-      s1.textContent=st.p1.score;
-      s2.textContent=st.p2.score;
-      tm.textContent=st.left;
-    }
+  socket.on('state', (st)=>{
+    s1.textContent = st.p1.score;
+    s2.textContent = st.p2.score;
+    tm.textContent = st.left;
     const grid=20, W=BASE_W, H=BASE_H;
     ctx.clearRect(0,0,W,H);
     ctx.save(); ctx.strokeStyle='#ffffff'; ctx.lineWidth=4; ctx.strokeRect(2,2,W-4,H-4); ctx.restore();
+    if (st.food){ ctx.fillStyle='red'; ctx.fillRect(st.food.x*grid, st.food.y*grid, grid, grid); }
+    if (st.sfood){ ctx.fillStyle='gold'; ctx.fillRect(st.sfood.x*grid, st.sfood.y*grid, grid, grid); }
+    ctx.fillStyle='white'; for (const p of st.p1.body) ctx.fillRect(p.x*grid,p.y*grid,grid,grid);
+    ctx.fillStyle='grey';  for (const p of st.p2.body) ctx.fillRect(p.x*grid,p.y*grid,grid,grid);
 
-    if(st.food){ ctx.fillStyle='red'; ctx.fillRect(st.food.x*grid, st.food.y*grid, grid, grid); }
-    if(st.sfood){ ctx.fillStyle='gold'; ctx.fillRect(st.sfood.x*grid, st.sfood.y*grid, grid, grid); }
-
-    // BEYAZ (P1)
-    ctx.fillStyle='#fff';
-    for(const p of st.p1.body){
-      ctx.fillRect(p.x*grid,p.y*grid,grid,grid);
-      ctx.strokeStyle='#111'; ctx.lineWidth=1; ctx.strokeRect(p.x*grid+0.5,p.y*grid+0.5,grid-1,grid-1);
-    }
-    // GRİ (P2)
-    ctx.fillStyle='#9aa0a6';
-    for(const p of st.p2.body){ ctx.fillRect(p.x*grid,p.y*grid,grid,grid); }
-
-    if(st.over){
+    if (st.over){
       overlay.style.display='flex';
       resultText.textContent = st.winner==='p1' ? (st.n1+' Kazandı!') : st.winner==='p2' ? (st.n2+' Kazandı!') : 'Berabere!';
       resultScore.textContent = `${st.n1}: ${st.p1.score} • ${st.n2}: ${st.p2.score}`;
+      controls.style.display='none';
     }
   });
 
-  document.addEventListener('keydown', e=>{
+  document.addEventListener('keydown', (e)=>{
     let dir=null;
-    if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key))
-      dir=keyToDir(e.key), socket.emit('input',{for:'p1', dir});   // Beyaz
-    else if(['w','a','s','d'].includes(e.key))
-      dir=keyToDir(e.key), socket.emit('input',{for:'p2', dir});   // Gri
+    if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){ dir=keyToDir(e.key); socket.emit('input',{for:'p1', dir}); }
+    else if (['w','a','s','d'].includes(e.key)){ dir=keyToDir(e.key); socket.emit('input',{for:'p2', dir}); }
   });
+
+  btnUp.addEventListener('click', ()=> socket.emit('input',{for:'p1', dir:{x:0,y:-1}}));
+  btnDown.addEventListener('click', ()=> socket.emit('input',{for:'p1', dir:{x:0,y:1}}));
+  btnLeft.addEventListener('click', ()=> socket.emit('input',{for:'p1', dir:{x:-1,y:0}}));
+  btnRight.addEventListener('click', ()=> socket.emit('input',{for:'p1', dir:{x:1,y:0}}));
+
   function keyToDir(key){
-    if(key==='ArrowUp'||key==='w') return {x:0,y:-1};
-    if(key==='ArrowDown'||key==='s') return {x:0,y: 1};
-    if(key==='ArrowLeft'||key==='a') return {x:-1,y:0};
-    if(key==='ArrowRight'||key==='d') return {x:1,y:0};
+    if (key==='ArrowUp'||key==='w') return {x:0,y:-1};
+    if (key==='ArrowDown'||key==='s') return {x:0,y: 1};
+    if (key==='ArrowLeft'||key==='a') return {x:-1,y:0};
+    if (key==='ArrowRight'||key==='d') return {x:1,y:0};
     return {x:0,y:0};
   }
-
-  // Dokunma (ekran yarısı) – opsiyonel basit kontrol
-  function handleTouch(e){
-    e.preventDefault();
-    const r=canvas.getBoundingClientRect();
-    for(let i=0;i<e.touches.length;i++){
-      const t=e.touches[i], x=t.clientX-r.left, y=t.clientY-r.top;
-      const left=x<r.width/2;
-      const cx=left ? r.width*0.25 : r.width*0.75, cy=r.height*0.5;
-      const dx=x-cx, dy=y-cy;
-      const dir=Math.abs(dx)>Math.abs(dy) ? {x:dx>0?1:-1,y:0} : {x:0,y:dy>0?1:-1};
-      socket.emit('input',{for:left?'p1':'p2',dir});
-    }
-  }
-  canvas.addEventListener('touchstart',handleTouch,{passive:false});
-  canvas.addEventListener('touchmove',handleTouch,{passive:false});
-
-  // ===== Draggable pads =====
-  function makePad(padEl, player){
-    // hareket: sadece handle üzerinden sürükle
-    const handle = padEl.querySelector('.handle');
-    let startX=0,startY=0,origX=0,origY=0,drag=false;
-
-    const onDown = (ev)=>{
-      drag=true;
-      const p = getPoint(ev);
-      startX=p.x; startY=p.y;
-      const rect=padEl.getBoundingClientRect();
-      origX=rect.left; origY=rect.top;
-      ev.preventDefault();
-    };
-    const onMove = (ev)=>{
-      if(!drag) return;
-      const p=getPoint(ev);
-      const dx=p.x-startX, dy=p.y-startY;
-      padEl.style.left = (origX+dx) + 'px';
-      padEl.style.top  = (origY+dy) + 'px';
-      padEl.style.right = 'auto'; // sağ alt başlangıcını iptal
-      padEl.style.bottom= 'auto';
-    };
-    const onUp = ()=>{ drag=false; };
-
-    handle.addEventListener('pointerdown', onDown);
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
-
-    // butonlar yön gönderir
-    padEl.querySelectorAll('button[data-dx]').forEach(btn=>{
-      btn.addEventListener('pointerdown', (e)=>{
-        e.preventDefault();
-        const dx=+btn.dataset.dx, dy=+btn.dataset.dy;
-        socket.emit('input',{for:player, dir:{x:dx,y:dy}});
-      });
-    });
-  }
-  function getPoint(ev){
-    if (ev.touches && ev.touches[0]) return {x:ev.touches[0].clientX, y:ev.touches[0].clientY};
-    else return {x:ev.clientX, y:ev.clientY};
-  }
-  makePad(document.getElementById('padP1'),'p1');
-  makePad(document.getElementById('padP2'),'p2');
 
   restartBtn.addEventListener('click', ()=>{ waitInfo.style.display='block'; socket.emit('rematch'); });
   newOpponentBtn.addEventListener('click', ()=>{ overlay.style.display='flex'; waitInfo.textContent='Yeni rakip aranıyor...'; waitInfo.style.display='block'; socket.emit('find_new'); });
 
-  showHSBtn.addEventListener('click', async()=>{ await refreshHS(); hsModal.style.display='flex'; });
-  hsClose.addEventListener('click', ()=>hsModal.style.display='none');
-  hsModal.addEventListener('click', e=>{ if(e.target===hsModal) hsModal.style.display='none'; });
+  showHSBtn.addEventListener('click', async ()=>{ await refreshHS(); hsModal.style.display='flex'; });
+  hsClose.addEventListener('click', ()=>{ hsModal.style.display='none'; });
+  hsModal.addEventListener('click', (e)=>{ if(e.target===hsModal) hsModal.style.display='none'; });
 
   async function refreshHS(){
     try{
-      const res=await fetch('/highscores');
-      const data=await res.json();
-      hsList.innerHTML=data.map((r,i)=>(
-        `<li><span class="rank">${i+1}.</span><span class="name">${escapeHtml(r.nick)}</span><span class="score">${r.score}</span></li>`
-      )).join('');
+      const res = await fetch('/highscores');
+      const data = await res.json();
+      hsList.innerHTML = data.map((r,i)=>(`<li><span class="rank">${i+1}.</span><span class="name">${escapeHtml(r.nick)}</span><span class="score">${r.score}</span></li>`)).join('');
     }catch(e){}
   }
-  function escapeHtml(s){return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
-
-  function startCountdown(cb){
-    let count=3;
-    countdown.style.display='flex';
-    countdown.textContent=count;
-    const int=setInterval(()=>{
-      count--;
-      if(count>0) countdown.textContent=count;
-      else if(count===0) countdown.textContent='Başla!';
-      else{
-        clearInterval(int);
-        countdown.style.display='none';
-        cb();
-      }
-    },1000);
-  }
+  function escapeHtml(s){ return String(s).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
 })();
 </script>
 </body>
