@@ -41,27 +41,41 @@
   #hsList .name{ flex:1; text-align:left; font-weight:600; }
   #hsList .score{ width:48px; text-align:left; opacity:.9; }
 
-  /* ---- Mobil yön butonları (sadece oyun ekranında) ---- */
-  #mobileControls{
-    display:none;
-    position:fixed; left:0; right:0; bottom:16px;
-    z-index:8; padding:0 16px;
-    justify-content:space-between; align-items:flex-end;
+  /* ---- Tek D-pad (mobil) ---- */
+  #dpadWrap{
+    display:none; position:fixed; left:50%; transform:translateX(-50%);
+    bottom:18px; z-index:8; user-select:none; touch-action:none;
   }
-  .ctrl-col{
-    display:flex; flex-direction:column; gap:12px;
+  #dpad{
+    position:relative; width:180px; height:180px; border-radius:20px;
+    background:#0e1114b0; border:1px solid #ffffff22; backdrop-filter:blur(6px);
+    box-shadow:0 8px 24px #0008;
   }
-  .ctrl-row{
-    display:flex; flex-direction:row; gap:12px;
+  /* görsel oklar (tek yüzey, sadece görünüm) */
+  .arrow{
+    position:absolute; display:flex; align-items:center; justify-content:center;
+    color:#e9eef5; font-weight:800; font-size:22px; opacity:.9;
+    background:#ffffff14; border:1px solid #ffffff22; border-radius:12px;
   }
-  .ctrl-btn{
-    width:72px; height:72px; font-size:32px; line-height:72px;
-    background:#ffffff22; color:#fff; border:none; border-radius:14px;
-    box-shadow:0 6px 16px #0006;
+  .arrow.up{    left:66px; top:10px;   width:48px; height:56px; }
+  .arrow.down{  left:66px; bottom:10px;width:48px; height:56px; }
+  .arrow.left{  top:66px; left:10px;   width:56px; height:48px; }
+  .arrow.right{ top:66px; right:10px;  width:56px; height:48px; }
+  /* merkez halka ve knob (görsel) */
+  #ring{
+    position:absolute; left:50%; top:50%; width:120px; height:120px; margin:-60px 0 0 -60px;
+    border-radius:50%; border:1px dashed #ffffff30;
   }
-  .ctrl-btn:active{ background:#ffffff33; }
+  #knob{
+    position:absolute; left:50%; top:50%; width:50px; height:50px; margin:-25px 0 0 -25px;
+    border-radius:50%; background:#ffffff26; border:2px solid #ffffff55;
+    transition:transform .08s ease;
+  }
+  @media (pointer:coarse){
+    #dpadWrap{ display:block; }
+  }
   @media (pointer:fine){
-    #mobileControls{ display:none !important; } /* masaüstünde gizle */
+    #dpadWrap{ display:none !important; } /* masaüstünde gizle */
   }
 </style>
 </head>
@@ -102,15 +116,15 @@
     </div>
   </div>
 
-  <!-- Mobil Yön Tuşları (sol ↑↓, sağ ←→) -->
-  <div id="mobileControls">
-    <div class="ctrl-col">
-      <button class="ctrl-btn" data-dir="up">▲</button>
-      <button class="ctrl-btn" data-dir="down">▼</button>
-    </div>
-    <div class="ctrl-row">
-      <button class="ctrl-btn" data-dir="left">◀</button>
-      <button class="ctrl-btn" data-dir="right">▶</button>
+  <!-- Tek D-pad -->
+  <div id="dpadWrap" aria-label="Yön D-Pad">
+    <div id="dpad">
+      <div class="arrow up">▲</div>
+      <div class="arrow down">▼</div>
+      <div class="arrow left">◀</div>
+      <div class="arrow right">▶</div>
+      <div id="ring"></div>
+      <div id="knob"></div>
     </div>
   </div>
 </section>
@@ -138,23 +152,21 @@
         overlay=document.getElementById('overlay'), resultText=document.getElementById('resultText'),
         resultScore=document.getElementById('resultScore'), restartBtn=document.getElementById('restartBtn'),
         newOpponentBtn=document.getElementById('newOpponentBtn'), waitInfo=document.getElementById('waitInfo'),
-        showHSBtn=document.getElementById('showHSBtn'),
-        countdown=document.getElementById('countdown'),
+        showHSBtn=document.getElementById('showHSBtn'), countdown=document.getElementById('countdown'),
         hsModal=document.getElementById('hsModal'), hsClose=document.getElementById('hsClose'), hsList=document.getElementById('hsList'),
-        mobileControls=document.getElementById('mobileControls');
+        dpadWrap=document.getElementById('dpadWrap'), dpad=document.getElementById('dpad'), ring=document.getElementById('ring'), knob=document.getElementById('knob');
 
   // ---- Canvas auto-fit
   const BASE_W=800, BASE_H=600;
   function fitCanvas(){
     const availW=Math.min(window.innerWidth*0.98,1200);
-    const availH=window.innerHeight*0.70; // alttaki kontroller için yer
+    const availH=window.innerHeight*0.70; // altta d-pad için pay
     const scale=Math.min(availW/BASE_W, availH/BASE_H);
     canvas.style.width=(BASE_W*scale)+'px';
     canvas.style.height=(BASE_H*scale)+'px';
   }
   window.addEventListener('resize', fitCanvas); fitCanvas();
 
-  // ---- Socket
   const socket=io();
 
   // ---- Login
@@ -176,11 +188,11 @@
     s1.textContent='0'; s2.textContent='0'; tm.textContent=data.duration;
     fitCanvas();
 
-    // sadece mobilde butonları aç
+    // sadece mobilde d-pad göster
     if (window.matchMedia('(pointer: coarse)').matches) {
-      mobileControls.style.display='flex';
+      dpadWrap.style.display='block';
     } else {
-      mobileControls.style.display='none';
+      dpadWrap.style.display='none';
     }
 
     startCountdown(()=>{ socket.emit('countdown_done'); });
@@ -197,11 +209,11 @@
 
     const grid=20, W=BASE_W, H=BASE_H;
     ctx.clearRect(0,0,W,H);
-    // sınır
     ctx.save(); ctx.strokeStyle='#ffffff'; ctx.lineWidth=4; ctx.strokeRect(2,2,W-4,H-4); ctx.restore();
-    // yemler
+
     if(st.food){ ctx.fillStyle='red'; ctx.fillRect(st.food.x*grid, st.food.y*grid, grid, grid); }
     if(st.sfood){ ctx.fillStyle='gold'; ctx.fillRect(st.sfood.x*grid, st.sfood.y*grid, grid, grid); }
+
     // P1 (Beyaz)
     ctx.fillStyle='#fff';
     for(const p of st.p1.body){
@@ -216,7 +228,10 @@
       overlay.style.display='flex';
       resultText.textContent = st.winner==='p1' ? (st.n1+' Kazandı!') : st.winner==='p2' ? (st.n2+' Kazandı!') : 'Berabere!';
       resultScore.textContent = `${st.n1}: ${st.p1.score} • ${st.n2}: ${st.p2.score}`;
-      mobileControls.style.display='none';
+      dpadWrap.style.display='none';
+      // knob’u merkeze al
+      knob.style.transform='translate(0px,0px)';
+      lastDir='stop';
     }
   });
 
@@ -236,17 +251,60 @@
     return {x:0,y:0};
   }
 
-  // ---- Mobile buttons (P1 only)
-  document.querySelectorAll('#mobileControls .ctrl-btn').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      const d = btn.dataset.dir;
-      const dir = d==='up' ? {x:0,y:-1}
-                : d==='down' ? {x:0,y:1}
-                : d==='left' ? {x:-1,y:0}
-                : {x:1,y:0};
-      socket.emit('input',{for:'p1', dir});
-    });
-  });
+  // ---- D-pad tek yüzey işleyişi (P1 only)
+  const ringR=60, knobR=25, dead=8;
+  let dragging=false, lastDir='stop';
+
+  // tek yüzey: sadece dpad üzerinde dinle, çocuklara değil
+  dpad.addEventListener('pointerdown', (ev)=>{
+    dragging=true; dpad.setPointerCapture?.(ev.pointerId);
+    handlePad(ev);
+    ev.preventDefault();
+  }, {passive:false});
+
+  window.addEventListener('pointermove', (ev)=>{
+    if(!dragging) return;
+    handlePad(ev);
+  }, {passive:false});
+
+  window.addEventListener('pointerup', (ev)=>{
+    if(!dragging) return;
+    dragging=false;
+    knob.style.transform='translate(0px,0px)'; // merkeze dön
+    // 'stop' göndermiyoruz; yılan mevcut yönünde akmaya devam eder
+  }, {passive:false});
+
+  function handlePad(ev){
+    const br=dpad.getBoundingClientRect();
+    const cx=br.left + br.width/2;
+    const cy=br.top  + br.height/2;
+    const dx=ev.clientX - cx;
+    const dy=ev.clientY - cy;
+    const ax=Math.abs(dx), ay=Math.abs(dy);
+    const dist=Math.hypot(dx,dy);
+
+    // knob görseli – halka içinde kalsın
+    const max = ringR - knobR*0.6;
+    const ang = Math.atan2(dy,dx);
+    const clamp = Math.min(dist,max);
+    const kx = Math.cos(ang)*clamp;
+    const ky = Math.sin(ang)*clamp;
+    knob.style.transform=`translate(${kx}px,${ky}px)`;
+
+    let dir='stop';
+    if(dist>dead){
+      // 4 yöne snap – eksen üstünlüğü
+      if(ax>ay) dir = dx>0 ? 'right' : 'left';
+      else      dir = dy>0 ? 'down'  : 'up';
+    }
+    if(dir!==lastDir){
+      lastDir=dir;
+      if(dir==='up')    socket.emit('input',{for:'p1', dir:{x:0,y:-1}});
+      if(dir==='down')  socket.emit('input',{for:'p1', dir:{x:0,y: 1}});
+      if(dir==='left')  socket.emit('input',{for:'p1', dir:{x:-1,y:0}});
+      if(dir==='right') socket.emit('input',{for:'p1', dir:{x:1,y:0}});
+    }
+  }
 
   // ---- Rematch / New opponent / Top100
   restartBtn.addEventListener('click', ()=>{ waitInfo.style.display='block'; socket.emit('rematch'); });
