@@ -7,14 +7,16 @@ const { Server } = require('socket.io');
 
 const PORT = process.env.PORT || 3000;
 
-/* Oyun ayarları */
-const ROUND_DURATION = 300;
+/* ------------ Oyun Ayarları ------------ */
+const ROUND_DURATION = 300;   // sn
 const GRID = 20;
-const W = 800/GRID; // 40
-const H = 600/GRID; // 30
-const TICK_MS = 100;
-const BROADCAST_EVERY = 1;
+const W = 800 / GRID;         // 40
+const H = 600 / GRID;         // 30
+const TICK_MS = 80;           // 12.5 Hz tick
+const BROADCAST_EVERY = 2;    // ~6.25 Hz yayın (lag azalır)
+const INPUT_MIN_MS = 50;      // input rate limit
 
+/* ------------ Express & Socket.IO ------ */
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -22,28 +24,26 @@ const io = new Server(server, {
   pingTimeout: 20000,
   pingInterval: 25000,
   perMessageDeflate: { threshold: 1024 },
+  maxHttpBufferSize: 1e6
 });
 
-/* static */
 app.use(express.static(path.join(__dirname)));
-app.get('/', (req,res)=>res.sendFile(path.join(__dirname,'client.html')));
+app.get('/', (req,res)=>res.sendFile(path.join(__dirname, 'client.html')));
 
-/* highscores */
-const HS_FILE = path.join(__dirname,'highscores.json');
-function loadHS(){ try{ return JSON.parse(fs.readFileSync(HS_FILE,'utf8')||'[]'); } catch{ return []; } }
-function saveHS(arr){ try{ fs.writeFileSync(HS_FILE, JSON.stringify(arr.slice(0,100),null,2)); } catch{} }
-app.get('/highscores', (req,res)=> res.json(loadHS().slice(0,100)) );
+/* ------------ Highscore API ------------ */
+const HS_FILE = path.join(__dirname, 'highscores.json');
+function loadHS(){ try { return JSON.parse(fs.readFileSync(HS_FILE,'utf8')||'[]'); } catch { return []; } }
+function saveHS(arr){ try { fs.writeFileSync(HS_FILE, JSON.stringify(arr.slice(0,100),null,2)); } catch {} }
+app.get('/highscores', (req,res)=> res.json(loadHS().slice(0,100)));
 
-/* aktif kullanıcılar */
-const activeUsers = new Map(); // socket.id -> {nick, ip}
+/* ------------ Durum / Eşleşme ---------- */
+const activeUsers = new Map(); // socket.id -> {nick, ip, lastInputTs}
 function canUseNick(nick, ip){
   for (const {nick:n, ip:uip} of activeUsers.values()){
     if (n===nick && uip!==ip) return false;
   }
   return true;
 }
-
-/* eşleşme ve oyunlar */
 const waitingQueue = []; // {socketId, nick, ip, botTimer?}
 const games = new Map(); // roomId -> game
 
@@ -55,8 +55,7 @@ io.on('connection', (socket)=>{
     if (!nick) return socket.emit('nick_error','Kullanıcı adı boş olamaz!');
     if (nick.length>15) return socket.emit('nick_error','Kullanıcı adı en fazla 15 karakter olabilir.');
     if (!canUseNick(nick, ip)) return socket.emit('nick_error','Bu kullanıcı adı kullanılıyor.');
-
-    activeUsers.set(socket.id, {nick, ip});
+    activeUsers.set(socket.id, { nick, ip, lastInputTs: 0 });
     enqueueForMatch(socket, nick, ip);
   });
 
@@ -68,6 +67,12 @@ io.on('connection', (socket)=>{
 
   socket.on('input', ({dir}={})=>{
     if (!dir) return;
+    const u = activeUsers.get(socket.id);
+    const now = Date.now();
+    if (u) {
+      if (now - u.lastInputTs < INPUT_MIN_MS) return; // rate-limit
+      u.lastInputTs = now;
+    }
     const g = findGameBySocket(socket.id); if (!g || !g.loopStarted) return;
     if (socket.id===g.p1Id) setDir(g.state.p1, dir);
     else if (socket.id===g.p2Id) setDir(g.state.p2, dir);
@@ -87,22 +92,17 @@ io.on('connection', (socket)=>{
 
   socket.on('disconnect', ()=>{
     const i = waitingQueue.findIndex(w=>w.socketId===socket.id);
-    if (i>=0){
-      const w = waitingQueue.splice(i,1)[0];
-      if (w.botTimer) clearTimeout(w.botTimer);
-    }
+    if (i>=0){ const w = waitingQueue.splice(i,1)[0]; if (w.botTimer) clearTimeout(w.botTimer); }
     const g = findGameBySocket(socket.id);
     if (g) endGame(g, socket.id===g.p1Id ? 'p2' : 'p1', 'disconnect');
     activeUsers.delete(socket.id);
   });
 });
 
-/* ---- İnsan-öncelikli eşleşme ---- */
+/* ---- İnsan öncelikli eşleşme + 3 sn bekleme ---- */
 function enqueueForMatch(socket, nick, ip){
-  // 0) Eğer botlu ve HENÜZ BAŞLAMAMIŞ bir oyun varsa → bota rağmen bu oyuncuyu içeri al (swap)
-  if (trySwapIntoBotGame(socket, nick, ip)) return;
+  if (trySwapIntoBotGame(socket, nick)) return; // başlamamış bot maçına insanı al
 
-  // 1) Normal kuyruk: bekleyen varsa eşleştir
   const idx = waitingQueue.findIndex(w=>w.socketId!==socket.id);
   if (idx>=0){
     const w = waitingQueue.splice(idx,1)[0];
@@ -111,7 +111,6 @@ function enqueueForMatch(socket, nick, ip){
     return;
   }
 
-  // 2) Kimse yoksa kuyruğa ekle ve 5sn sonra botla başlat
   const entry = { socketId: socket.id, nick, ip, isBot:false, botTimer:null };
   waitingQueue.push(entry);
   entry.botTimer = setTimeout(()=>{
@@ -120,13 +119,12 @@ function enqueueForMatch(socket, nick, ip){
       waitingQueue.splice(i,1);
       createGame({ p1: entry, p2: { socketId:'BOT_'+Date.now(), nick:'BOT', ip:'-', isBot:true } });
     }
-  }, 5000);
+  }, 3000); // <<< 3 saniye
 }
 
-function trySwapIntoBotGame(socket, nick, ip){
+function trySwapIntoBotGame(socket, nick){
   for (const g of games.values()){
     if (g.bot && !g.loopStarted){
-      // bot yerine gerçek oyuncuyu yerleştir
       const s2 = io.sockets.sockets.get(socket.id);
       if (!s2) return false;
       s2.join(g.roomId); s2.data = { ...(s2.data||{}), roomId:g.roomId };
@@ -134,19 +132,13 @@ function trySwapIntoBotGame(socket, nick, ip){
       g.bot = false;
       g.p2Id = socket.id;
       g.p2Nick = nick;
-
-      // hazır bayraklarını güncelle (bot'u kaldır)
       delete g.readyFlags['BOT'];
       g.readyFlags[g.p2Id] = false;
 
-      // güvenlik başlangıç zamanlayıcısını yeniden ayarla (insan-insan için force=false)
       if (g.startSafetyTimer) clearTimeout(g.startSafetyTimer);
       g.startSafetyTimer = setTimeout(()=> maybeStartGameLoop(g, false), 4000);
 
-      // yeni oyuncuya match_start (rol p2)
       s2.emit('match_start', { duration: g.left || ROUND_DURATION, role: 'p2' });
-
-      // p1 zaten odada; istersen bilgilendirme gönderebilirsin (gerek yok)
       return true;
     }
   }
@@ -166,19 +158,20 @@ function findGameBySocket(sid){
   return null;
 }
 
-/* ---- Oyun yaratımı ---- */
+/* ---- Oyun Kurulumu ---- */
 function createGame({p1, p2}){
   const roomId = 'R'+Math.random().toString(36).slice(2,9);
   const s1 = io.sockets.sockets.get(p1.socketId);
   const botP2 = !!p2.isBot;
   let s2 = null;
+
   if (s1){ s1.join(roomId); s1.data = { ...(s1.data||{}), roomId }; }
   if (!botP2){
     s2 = io.sockets.sockets.get(p2.socketId);
     if (s2){ s2.join(roomId); s2.data = { ...(s2.data||{}), roomId }; }
   }
 
-  const state = makeInitialState(p1.nick, p2.nick, botP2);
+  const state = makeInitialState(p1.nick, p2.nick);
   const g = {
     roomId,
     p1Id: s1 ? s1.id : null,
@@ -186,12 +179,14 @@ function createGame({p1, p2}){
     p1Nick: p1.nick,
     p2Nick: p2.nick,
     bot: botP2,
+
     loop: null,
     loopStarted: false,
     lastTickTs: 0,
     left: ROUND_DURATION,
     leftTimer: null,
     startSafetyTimer: null,
+
     readyFlags: {},
     rematchReady: {},
     state
@@ -204,12 +199,10 @@ function createGame({p1, p2}){
   if (g.p1Id) g.readyFlags[g.p1Id]=false;
   if (!g.p2Id) g.readyFlags['BOT']=true; else g.readyFlags[g.p2Id]=false;
 
-  // güvenlik: bot varsa başlangıcı force=true; insan-insanda force=false
   g.startSafetyTimer = setTimeout(()=> maybeStartGameLoop(g, g.bot ? true : false), 4000);
 }
 
-/* ---- Başlangıç state ---- */
-function makeInitialState(n1, n2, bot){
+function makeInitialState(n1, n2){
   return {
     n1, n2,
     p1: snakeAt(5,10,1,0),
@@ -222,8 +215,9 @@ function makeInitialState(n1, n2, bot){
     winner: null
   };
 }
+
 function snakeAt(x,y,dx,dy){
-  const body=[]; for (let i=0;i<5;i++) body.push({x:x - i*dx, y:y - i*dy});
+  const body=[]; for(let i=0;i<5;i++) body.push({x:x - i*dx, y:y - i*dy});
   return { body, dir:{x:dx,y:dy}, pending:0, score:0 };
 }
 function randEmptyCell(p1,p2){
@@ -237,7 +231,7 @@ function randEmptyCell(p1,p2){
 }
 function pickNextSpecial(...opts){ return opts[(Math.random()*opts.length)|0]; }
 
-/* ---- Oyun döngüsü ---- */
+/* ---- Oyun Döngüsü ---- */
 function maybeStartGameLoop(g, force=false){
   if (g.loopStarted) return;
   const allReady = force || Object.values(g.readyFlags).every(v=>v===true);
@@ -254,11 +248,10 @@ function maybeStartGameLoop(g, force=false){
       g.lastTickTs += TICK_MS;
       tick(g);
     }
-    g.loop = setTimeout(loop, Math.max(0, TICK_MS - (Date.now()-g.lastTickTs)));
+    g.loop = setTimeout(loop, Math.max(0, TICK_MS - (Date.now() - g.lastTickTs)));
   };
   loop();
 
-  // süre
   g.left = ROUND_DURATION;
   g.leftTimer = setInterval(()=>{
     if (g.state.over){ clearInterval(g.leftTimer); return; }
@@ -274,6 +267,7 @@ function maybeStartGameLoop(g, force=false){
 function tick(g){
   const S = g.state;
 
+  // Bot yapay zekâsı
   if (g.bot){
     const d = botThink(S);
     if (d) setDir(S.p2, d);
@@ -285,8 +279,8 @@ function tick(g){
   const p1Dead = isDead(S.p1, S.p2);
   const p2Dead = isDead(S.p2, S.p1);
 
-  handleFood(S,'p1');
-  handleFood(S,'p2');
+  handleFood(S, 'p1');
+  handleFood(S, 'p2');
 
   if (p1Dead || p2Dead){
     if (p1Dead && p2Dead) endGame(g,'draw','crash');
@@ -295,7 +289,9 @@ function tick(g){
     return;
   }
 
-  if (BROADCAST_EVERY===1 || (S._bc=((S._bc||0)+1))%BROADCAST_EVERY===0){
+  // Yayın (volatile -> paket kaybı sorun olmaz)
+  S._bc = (S._bc||0) + 1;
+  if (S._bc % BROADCAST_EVERY === 0){
     io.to(g.roomId).volatile.emit('state', {
       n1: g.p1Nick, n2: g.p2Nick,
       p1: { body:S.p1.body, score:S.p1.score },
@@ -310,14 +306,14 @@ function tick(g){
 
 /* ---- Mekanikler ---- */
 function setDir(s, dir){
-  const nx=Math.sign(dir.x), ny=Math.sign(dir.y);
-  if (s.dir.x + nx === 0 && s.dir.y + ny === 0) return;
+  const nx = Math.sign(dir.x), ny = Math.sign(dir.y);
+  if (s.dir.x + nx === 0 && s.dir.y + ny === 0) return; // tersine dönmesin
   s.dir = {x:nx, y:ny};
 }
 function stepSnake(s){
   const h=s.body[0];
   const nx=h.x + s.dir.x, ny=h.y + s.dir.y;
-  s.body.unshift({x:nx,y:ny});
+  s.body.unshift({x:nx, y:ny});
   if (s.pending>0) s.pending--; else s.body.pop();
 }
 function isDead(self, other){
@@ -347,14 +343,14 @@ function handleFood(S, who){
 
 /* ---- Bot ---- */
 function botThink(S){
-  const h=S.p2.body[0];
-  const t=S.sfood || S.food;
-  const cand=[{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}];
+  const h = S.p2.body[0];
+  const t = S.sfood || S.food;
+  const cand = [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}];
   let best=null, bestDist=Infinity;
   for (const d of cand){
     const nx=h.x+d.x, ny=h.y+d.y;
     if (isPointDead({x:nx,y:ny}, S.p2, S.p1)) continue;
-    const dist=Math.abs(nx-t.x) + Math.abs(ny-t.y);
+    const dist = Math.abs(nx-t.x) + Math.abs(ny-t.y);
     if (dist<bestDist){ bestDist=dist; best=d; }
   }
   return best || S.p2.dir;
@@ -367,23 +363,21 @@ function isPointDead(h, self, other){
 }
 
 /* ---- Bitiş & Skor ---- */
-function endGame(g, winner, reason){
+function endGame(g, winner){
   if (!g || g.state.over) return;
   g.state.over = true;
   g.state.winner = winner;
 
   g.loopStarted = false;
-  if (g.loop) { clearTimeout(g.loop); g.loop=null; }
-  if (g.leftTimer) { clearInterval(g.leftTimer); g.leftTimer=null; }
+  if (g.loop){ clearTimeout(g.loop); g.loop=null; }
+  if (g.leftTimer){ clearInterval(g.leftTimer); g.leftTimer=null; }
   if (g.startSafetyTimer){ clearTimeout(g.startSafetyTimer); g.startSafetyTimer=null; }
 
   const hs = loadHS();
   const pushIfEligible = (nick,score)=>{ if (nick && nick!=='BOT') hs.push({nick,score,ts:Date.now()}); };
-
   if (winner==='p1') pushIfEligible(g.p1Nick, g.state.p1.score);
   else if (winner==='p2') pushIfEligible(g.p2Nick, g.state.p2.score);
   else if (winner==='draw'){ pushIfEligible(g.p1Nick, g.state.p1.score); pushIfEligible(g.p2Nick, g.state.p2.score); }
-
   hs.sort((a,b)=> b.score - a.score || a.ts - b.ts);
   saveHS(hs);
 
@@ -407,8 +401,7 @@ function tryStartRematch(g){
     io.to(g.roomId).emit('rematch_wait', rdy);
     return;
   }
-
-  g.state = makeInitialState(g.p1Nick, g.p2Nick, g.bot);
+  g.state = makeInitialState(g.p1Nick, g.p2Nick);
   g.left = ROUND_DURATION;
   g.readyFlags = {};
   g.rematchReady = {};
@@ -417,10 +410,11 @@ function tryStartRematch(g){
 
   const s1 = io.sockets.sockets.get(g.p1Id);
   const s2 = io.sockets.sockets.get(g.p2Id);
-  if (s1) s1.emit('match_start', { duration: ROUND_DURATION, role:'p1' });
-  if (s2) s2.emit('match_start', { duration: ROUND_DURATION, role:'p2' });
+  if (s1) s1.emit('match_start', { duration: ROUND_DURATION, role: 'p1' });
+  if (s2) s2.emit('match_start', { duration: ROUND_DURATION, role: 'p2' });
 
   g.startSafetyTimer = setTimeout(()=> maybeStartGameLoop(g, g.bot ? true : false), 4000);
 }
 
+/* ---- Yardımcı ---- */
 server.listen(PORT, ()=> console.log('Server listening on', PORT));
