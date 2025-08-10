@@ -41,34 +41,34 @@
   #hsList .name{ flex:1; text-align:left; font-weight:600; }
   #hsList .score{ width:48px; text-align:left; opacity:.9; }
 
-  /* Tek D-pad (mobil) — oyun alanının ALTINDA */
+  /* Tek D-pad (mobil) — canvas ALTINDA, daha büyük */
   #dpadWrap{
     display:none;
-    margin:12px auto 0;
+    margin:14px auto 0;
     width:100%; max-width:860px;
     display:flex; justify-content:center;
     user-select:none; touch-action:none;
   }
   #dpad{
-    position:relative; width:180px; height:180px; border-radius:20px;
+    position:relative; width:220px; height:220px; border-radius:22px;
     background:#0e1114b0; border:1px solid #ffffff22; backdrop-filter:blur(6px);
     box-shadow:0 8px 24px #0008;
   }
   .arrow{
     position:absolute; display:flex; align-items:center; justify-content:center;
-    color:#e9eef5; font-weight:800; font-size:22px; opacity:.9;
-    background:#ffffff14; border:1px solid #ffffff22; border-radius:12px;
+    color:#e9eef5; font-weight:800; font-size:28px; opacity:.95;
+    background:#ffffff22; border:1px solid #ffffff33; border-radius:14px;
   }
-  .arrow.up{    left:66px; top:10px;   width:48px; height:56px; }
-  .arrow.down{  left:66px; bottom:10px;width:48px; height:56px; }
-  .arrow.left{  top:66px; left:10px;   width:56px; height:48px; }
-  .arrow.right{ top:66px; right:10px;  width:56px; height:48px; }
+  .arrow.up{    left:86px; top:12px;    width:56px; height:68px; }
+  .arrow.down{  left:86px; bottom:12px; width:56px; height:68px; }
+  .arrow.left{  top:86px; left:12px;   width:68px; height:56px; }
+  .arrow.right{ top:86px; right:12px;  width:68px; height:56px; }
   #ring{
-    position:absolute; left:50%; top:50%; width:120px; height:120px; margin:-60px 0 0 -60px;
+    position:absolute; left:50%; top:50%; width:150px; height:150px; margin:-75px 0 0 -75px;
     border-radius:50%; border:1px dashed #ffffff30;
   }
   #knob{
-    position:absolute; left:50%; top:50%; width:50px; height:50px; margin:-25px 0 0 -25px;
+    position:absolute; left:50%; top:50%; width:60px; height:60px; margin:-30px 0 0 -30px;
     border-radius:50%; background:#ffffff26; border:2px solid #ffffff55;
     transition:transform .08s ease;
   }
@@ -112,7 +112,7 @@
     </div>
   </div>
 
-  <!-- D-Pad: CANVAS ALTINDA -->
+  <!-- D-Pad -->
   <div id="dpadWrap" aria-label="Yön D-Pad">
     <div id="dpad">
       <div class="arrow up">▲</div>
@@ -150,22 +150,21 @@
         showHSBtn=document.getElementById('showHSBtn'),
         countdown=document.getElementById('countdown'),
         hsModal=document.getElementById('hsModal'), hsClose=document.getElementById('hsClose'), hsList=document.getElementById('hsList'),
-        dpadWrap=document.getElementById('dpadWrap'), dpad=document.getElementById('dpad'), ring=document.getElementById('ring'), knob=document.getElementById('knob');
+        dpadWrap=document.getElementById('dpadWrap'), dpad=document.getElementById('dpad'),
+        knob=document.getElementById('knob');
 
-  // Canvas auto-fit
   const BASE_W=800, BASE_H=600;
   function fitCanvas(){
     const availW=Math.min(window.innerWidth*0.98,1200);
-    const availH=window.innerHeight*0.70; // altta d-pad için yer
+    const availH=window.innerHeight*0.68; // daha fazla alan, altta büyük d-pad var
     const scale=Math.min(availW/BASE_W, availH/BASE_H);
     canvas.style.width=(BASE_W*scale)+'px';
     canvas.style.height=(BASE_H*scale)+'px';
   }
-  window.addEventListener('resize', fitCanvas); fitCanvas();
+  window.addEventListener('resize', fitCanvas, {passive:true}); fitCanvas();
 
   const socket = io({ transports: ['websocket'] });
 
-  // Login
   startBtn.addEventListener('click', ()=>{
     const nick=nicknameInput.value.trim();
     if(!nick){ loginError.textContent='Kullanıcı adı boş olamaz!'; return; }
@@ -175,7 +174,6 @@
   });
   socket.on('nick_error', msg=>loginError.textContent=msg);
 
-  // Match start -> oyun + countdown -> notify server
   socket.on('match_start', data=>{
     loginScreen.style.display='none';
     gameScreen.style.display='block';
@@ -183,11 +181,8 @@
     waitInfo.style.display='none';
     s1.textContent='0'; s2.textContent='0'; tm.textContent=data.duration;
     fitCanvas();
-
-    // mobilde d-pad göster
     if (window.matchMedia('(pointer: coarse)').matches) dpadWrap.style.display='flex';
     else dpadWrap.style.display='none';
-
     startCountdown(()=> socket.emit('countdown_done') );
   });
 
@@ -195,7 +190,6 @@
     waitInfo.style.display = (rdy.p1 && rdy.p2) ? 'none' : 'block';
   });
 
-  // Game state
   socket.on('state', st=>{
     if(!st.over){ tm.textContent=st.left; }
     s1.textContent=st.p1.score; s2.textContent=st.p2.score;
@@ -218,15 +212,13 @@
     for(const p of st.p2.body) ctx.fillRect(p.x*grid,p.y*grid,grid,grid);
 
     if(st.over){
-      // >>> değişen kısım: kazanan adıyla yaz
       let title = 'Berabere!';
-      if (st.winner === 'p1') title = (st.n1 || 'Oyuncu 1') + ' Kazandı!';
-      else if (st.winner === 'p2') title = (st.n2 || 'Oyuncu 2') + ' Kazandı!';
+      if (st.winner==='p1') title = (st.n1||'Oyuncu 1') + ' Kazandı!';
+      else if (st.winner==='p2') title = (st.n2||'Oyuncu 2') + ' Kazandı!';
       resultText.textContent = title;
-
       resultScore.textContent = `${st.n1}: ${st.p1.score} • ${st.n2}: ${st.p2.score}`;
       dpadWrap.style.display='none';
-      knob.style.transform='translate(0px,0px)'; lastDir='stop';
+      knob.style.transform='translate(0px,0px)';
       overlay.style.display='flex';
     }
   });
@@ -245,10 +237,23 @@
     return null;
   }
 
-  // D-pad tek yüzey
-  const ringR=60, knobR=25, dead=8;
+  /* ---- D-pad: hem TAP (dokun-bırak) hem SÜRÜKLE ---- */
+  const ringR=75, knobR=30, dead=10;
   let dragging=false, lastDir='stop';
 
+  // Tap (ok butonlarına bas)
+  document.querySelector('.arrow.up').addEventListener('touchstart', e=>{ e.preventDefault(); socket.emit('input',{dir:{x:0,y:-1}}); }, {passive:false});
+  document.querySelector('.arrow.down').addEventListener('touchstart', e=>{ e.preventDefault(); socket.emit('input',{dir:{x:0,y: 1}}); }, {passive:false});
+  document.querySelector('.arrow.left').addEventListener('touchstart', e=>{ e.preventDefault(); socket.emit('input',{dir:{x:-1,y:0}}); }, {passive:false});
+  document.querySelector('.arrow.right').addEventListener('touchstart', e=>{ e.preventDefault(); socket.emit('input',{dir:{x:1,y:0}}); }, {passive:false});
+
+  // Click desteği (tablet/karma aygıtlar)
+  document.querySelector('.arrow.up').addEventListener('click', ()=> socket.emit('input',{dir:{x:0,y:-1}}));
+  document.querySelector('.arrow.down').addEventListener('click', ()=> socket.emit('input',{dir:{x:0,y: 1}}));
+  document.querySelector('.arrow.left').addEventListener('click', ()=> socket.emit('input',{dir:{x:-1,y:0}}));
+  document.querySelector('.arrow.right').addEventListener('click', ()=> socket.emit('input',{dir:{x:1,y:0}}));
+
+  // Sürükleyerek yön verme
   dpad.addEventListener('pointerdown', (ev)=>{
     dragging=true; dpad.setPointerCapture?.(ev.pointerId);
     handlePad(ev); ev.preventDefault();
@@ -267,13 +272,11 @@
     const ax=Math.abs(dx), ay=Math.abs(dy);
     const dist=Math.hypot(dx,dy);
 
-    // knob görseli
     const max = ringR - knobR*0.6;
     const ang = Math.atan2(dy,dx);
     const clamp = Math.min(dist,max);
     knob.style.transform=`translate(${Math.cos(ang)*clamp}px,${Math.sin(ang)*clamp}px)`;
 
-    // yön seç
     let dir='stop';
     if (dist>dead){
       if (ax>ay) dir = dx>0 ? 'right' : 'left';
@@ -307,7 +310,6 @@
 
   function escapeHtml(s){return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
 
-  // Geri sayım
   function startCountdown(cb){
     let count=3;
     countdown.style.display='flex';
@@ -316,11 +318,7 @@
       count--;
       if(count>0) countdown.textContent=count;
       else if(count===0) countdown.textContent='Başla!';
-      else{
-        clearInterval(int);
-        countdown.style.display='none';
-        cb();
-      }
+      else{ clearInterval(int); countdown.style.display='none'; cb(); }
     },1000);
   }
 })();
