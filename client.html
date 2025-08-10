@@ -41,7 +41,7 @@
   #hsList .name{ flex:1; text-align:left; font-weight:600; }
   #hsList .score{ width:48px; text-align:left; opacity:.9; }
 
-  /* ---- Tek D-pad (mobil) ---- */
+  /* D-pad (tek yüzey, mobil) */
   #dpadWrap{
     display:none; position:fixed; left:50%; transform:translateX(-50%);
     bottom:18px; z-index:8; user-select:none; touch-action:none;
@@ -51,7 +51,6 @@
     background:#0e1114b0; border:1px solid #ffffff22; backdrop-filter:blur(6px);
     box-shadow:0 8px 24px #0008;
   }
-  /* görsel oklar (tek yüzey, sadece görünüm) */
   .arrow{
     position:absolute; display:flex; align-items:center; justify-content:center;
     color:#e9eef5; font-weight:800; font-size:22px; opacity:.9;
@@ -61,7 +60,6 @@
   .arrow.down{  left:66px; bottom:10px;width:48px; height:56px; }
   .arrow.left{  top:66px; left:10px;   width:56px; height:48px; }
   .arrow.right{ top:66px; right:10px;  width:56px; height:48px; }
-  /* merkez halka ve knob (görsel) */
   #ring{
     position:absolute; left:50%; top:50%; width:120px; height:120px; margin:-60px 0 0 -60px;
     border-radius:50%; border:1px dashed #ffffff30;
@@ -71,12 +69,8 @@
     border-radius:50%; background:#ffffff26; border:2px solid #ffffff55;
     transition:transform .08s ease;
   }
-  @media (pointer:coarse){
-    #dpadWrap{ display:block; }
-  }
-  @media (pointer:fine){
-    #dpadWrap{ display:none !important; } /* masaüstünde gizle */
-  }
+  @media (pointer:coarse){ #dpadWrap{ display:block; } }
+  @media (pointer:fine){ #dpadWrap{ display:none !important; } }
 </style>
 </head>
 <body>
@@ -141,7 +135,7 @@
 <script src="/socket.io/socket.io.js"></script>
 <script>
 (()=> {
-  // ---- Elements
+  // Elements
   const loginScreen=document.getElementById('loginScreen'),
         nicknameInput=document.getElementById('nickname'),
         loginError=document.getElementById('loginError'),
@@ -152,24 +146,26 @@
         overlay=document.getElementById('overlay'), resultText=document.getElementById('resultText'),
         resultScore=document.getElementById('resultScore'), restartBtn=document.getElementById('restartBtn'),
         newOpponentBtn=document.getElementById('newOpponentBtn'), waitInfo=document.getElementById('waitInfo'),
-        showHSBtn=document.getElementById('showHSBtn'), countdown=document.getElementById('countdown'),
+        showHSBtn=document.getElementById('showHSBtn'),
+        countdown=document.getElementById('countdown'),
         hsModal=document.getElementById('hsModal'), hsClose=document.getElementById('hsClose'), hsList=document.getElementById('hsList'),
         dpadWrap=document.getElementById('dpadWrap'), dpad=document.getElementById('dpad'), ring=document.getElementById('ring'), knob=document.getElementById('knob');
 
-  // ---- Canvas auto-fit
   const BASE_W=800, BASE_H=600;
   function fitCanvas(){
     const availW=Math.min(window.innerWidth*0.98,1200);
-    const availH=window.innerHeight*0.70; // altta d-pad için pay
+    const availH=window.innerHeight*0.70; // d-pad'e yer
     const scale=Math.min(availW/BASE_W, availH/BASE_H);
     canvas.style.width=(BASE_W*scale)+'px';
     canvas.style.height=(BASE_H*scale)+'px';
   }
   window.addEventListener('resize', fitCanvas); fitCanvas();
 
-  const socket=io();
+  const socket = io({ transports: ['websocket'] });
 
-  // ---- Login
+  let myRole = 'p1'; // server'dan gelecek
+
+  // Login
   startBtn.addEventListener('click', ()=>{
     const nick=nicknameInput.value.trim();
     if(!nick){ loginError.textContent='Kullanıcı adı boş olamaz!'; return; }
@@ -179,8 +175,10 @@
   });
   socket.on('nick_error', msg=>loginError.textContent=msg);
 
-  // ---- Match start -> show game + countdown -> notify server
+  // Match start (rol bilgisi ile)
   socket.on('match_start', data=>{
+    myRole = data.role || 'p1';
+
     loginScreen.style.display='none';
     gameScreen.style.display='block';
     overlay.style.display='none';
@@ -188,23 +186,18 @@
     s1.textContent='0'; s2.textContent='0'; tm.textContent=data.duration;
     fitCanvas();
 
-    // sadece mobilde d-pad göster
-    if (window.matchMedia('(pointer: coarse)').matches) {
-      dpadWrap.style.display='block';
-    } else {
-      dpadWrap.style.display='none';
-    }
+    if (window.matchMedia('(pointer: coarse)').matches) dpadWrap.style.display='block';
+    else dpadWrap.style.display='none';
 
-    startCountdown(()=>{ socket.emit('countdown_done'); });
+    startCountdown(()=> socket.emit('countdown_done') );
   });
 
   socket.on('rematch_wait', rdy=>{
     waitInfo.style.display = (rdy.p1 && rdy.p2) ? 'none' : 'block';
   });
 
-  // ---- Game state
   socket.on('state', st=>{
-    if(!st.over){ tm.textContent=st.left; }
+    if(!st.over) tm.textContent=st.left;
     s1.textContent=st.p1.score; s2.textContent=st.p2.score;
 
     const grid=20, W=BASE_W, H=BASE_H;
@@ -214,99 +207,84 @@
     if(st.food){ ctx.fillStyle='red'; ctx.fillRect(st.food.x*grid, st.food.y*grid, grid, grid); }
     if(st.sfood){ ctx.fillStyle='gold'; ctx.fillRect(st.sfood.x*grid, st.sfood.y*grid, grid, grid); }
 
-    // P1 (Beyaz)
+    // P1: Beyaz
     ctx.fillStyle='#fff';
     for(const p of st.p1.body){
       ctx.fillRect(p.x*grid,p.y*grid,grid,grid);
       ctx.strokeStyle='#111'; ctx.lineWidth=1; ctx.strokeRect(p.x*grid+0.5,p.y*grid+0.5,grid-1,grid-1);
     }
-    // P2 (Gri)
+    // P2: Gri
     ctx.fillStyle='#9aa0a6';
     for(const p of st.p2.body) ctx.fillRect(p.x*grid,p.y*grid,grid,grid);
 
     if(st.over){
       overlay.style.display='flex';
-      resultText.textContent = st.winner==='p1' ? (st.n1+' Kazandı!') : st.winner==='p2' ? (st.n2+' Kazandı!') : 'Berabere!';
-      resultScore.textContent = `${st.n1}: ${st.p1.score} • ${st.n2}: ${st.p2.score}`;
+      resultText.textContent = st.winner==='p1' ? ('Beyaz Kazandı!') : st.winner==='p2' ? ('Gri Kazandı!') : 'Berabere!';
+      resultScore.textContent = `Beyaz: ${st.p1.score} • Gri: ${st.p2.score}`;
       dpadWrap.style.display='none';
-      // knob’u merkeze al
       knob.style.transform='translate(0px,0px)';
       lastDir='stop';
     }
   });
 
-  // ---- Keyboard (PC)
-  document.addEventListener('keydown', e=>{
-    let dir=null;
-    if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key))
-      dir=keyToDir(e.key), socket.emit('input',{for:'p1', dir}); // Beyaz
-    else if(['w','a','s','d'].includes(e.key))
-      dir=keyToDir(e.key), socket.emit('input',{for:'p2', dir}); // Gri
+  // PC klavye: HANGİ rol isen o yılanı oynat; hem oklar hem WASD
+  document.addEventListener('keydown', (e)=>{
+    const dir = keyToDir(e.key);
+    if (!dir) return;
+    socket.emit('input', { dir }); // server rolüne göre doğru yılana uygular
   });
   function keyToDir(key){
-    if(key==='ArrowUp'||key==='w') return {x:0,y:-1};
-    if(key==='ArrowDown'||key==='s') return {x:0,y: 1};
-    if(key==='ArrowLeft'||key==='a') return {x:-1,y:0};
-    if(key==='ArrowRight'||key==='d') return {x:1,y:0};
-    return {x:0,y:0};
+    if (key==='ArrowUp'   || key==='w' || key==='W') return {x:0,y:-1};
+    if (key==='ArrowDown' || key==='s' || key==='S') return {x:0,y: 1};
+    if (key==='ArrowLeft' || key==='a' || key==='A') return {x:-1,y:0};
+    if (key==='ArrowRight'|| key==='d' || key==='D') return {x:1,y:0};
+    return null;
   }
 
-  // ---- D-pad tek yüzey işleyişi (P1 only)
+  // D-pad tek yüzey (P1/P2 fark etmeksizin "benim yılanım")
   const ringR=60, knobR=25, dead=8;
   let dragging=false, lastDir='stop';
 
-  // tek yüzey: sadece dpad üzerinde dinle, çocuklara değil
   dpad.addEventListener('pointerdown', (ev)=>{
     dragging=true; dpad.setPointerCapture?.(ev.pointerId);
-    handlePad(ev);
-    ev.preventDefault();
+    handlePad(ev); ev.preventDefault();
   }, {passive:false});
-
-  window.addEventListener('pointermove', (ev)=>{
+  window.addEventListener('pointermove', (ev)=>{ if(dragging) handlePad(ev); }, {passive:false});
+  window.addEventListener('pointerup', ()=>{
     if(!dragging) return;
-    handlePad(ev);
-  }, {passive:false});
-
-  window.addEventListener('pointerup', (ev)=>{
-    if(!dragging) return;
-    dragging=false;
-    knob.style.transform='translate(0px,0px)'; // merkeze dön
-    // 'stop' göndermiyoruz; yılan mevcut yönünde akmaya devam eder
+    dragging=false; knob.style.transform='translate(0px,0px)';
+    lastDir='stop'; // stop göndermiyoruz; yılan akmaya devam eder
   }, {passive:false});
 
   function handlePad(ev){
     const br=dpad.getBoundingClientRect();
-    const cx=br.left + br.width/2;
-    const cy=br.top  + br.height/2;
-    const dx=ev.clientX - cx;
-    const dy=ev.clientY - cy;
+    const cx=br.left+br.width/2, cy=br.top+br.height/2;
+    const dx=ev.clientX-cx, dy=ev.clientY-cy;
     const ax=Math.abs(dx), ay=Math.abs(dy);
     const dist=Math.hypot(dx,dy);
 
-    // knob görseli – halka içinde kalsın
+    // knob görseli
     const max = ringR - knobR*0.6;
     const ang = Math.atan2(dy,dx);
     const clamp = Math.min(dist,max);
-    const kx = Math.cos(ang)*clamp;
-    const ky = Math.sin(ang)*clamp;
-    knob.style.transform=`translate(${kx}px,${ky}px)`;
+    knob.style.transform=`translate(${Math.cos(ang)*clamp}px,${Math.sin(ang)*clamp}px)`;
 
+    // yön seç
     let dir='stop';
-    if(dist>dead){
-      // 4 yöne snap – eksen üstünlüğü
-      if(ax>ay) dir = dx>0 ? 'right' : 'left';
-      else      dir = dy>0 ? 'down'  : 'up';
+    if (dist>dead){
+      if (ax>ay) dir = dx>0 ? 'right' : 'left';
+      else       dir = dy>0 ? 'down'  : 'up';
     }
-    if(dir!==lastDir){
+    if (dir!==lastDir){
       lastDir=dir;
-      if(dir==='up')    socket.emit('input',{for:'p1', dir:{x:0,y:-1}});
-      if(dir==='down')  socket.emit('input',{for:'p1', dir:{x:0,y: 1}});
-      if(dir==='left')  socket.emit('input',{for:'p1', dir:{x:-1,y:0}});
-      if(dir==='right') socket.emit('input',{for:'p1', dir:{x:1,y:0}});
+      if(dir==='up')    socket.emit('input',{dir:{x:0,y:-1}});
+      if(dir==='down')  socket.emit('input',{dir:{x:0,y: 1}});
+      if(dir==='left')  socket.emit('input',{dir:{x:-1,y:0}});
+      if(dir==='right') socket.emit('input',{dir:{x:1,y:0}});
     }
   }
 
-  // ---- Rematch / New opponent / Top100
+  // Rematch / New opponent / Top100
   restartBtn.addEventListener('click', ()=>{ waitInfo.style.display='block'; socket.emit('rematch'); });
   newOpponentBtn.addEventListener('click', ()=>{ overlay.style.display='flex'; waitInfo.textContent='Yeni rakip aranıyor...'; waitInfo.style.display='block'; socket.emit('find_new'); });
 
@@ -325,7 +303,7 @@
 
   function escapeHtml(s){return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
 
-  // ---- Countdown logic
+  // Countdown
   function startCountdown(cb){
     let count=3;
     countdown.style.display='flex';
