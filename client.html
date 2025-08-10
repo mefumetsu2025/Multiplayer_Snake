@@ -24,14 +24,12 @@
   .badge{ padding:6px 10px; border-radius:10px; background:#ffffff14; }
   #stageWrap{ position:relative; width:100%; display:flex; justify-content:center; }
   #gameCanvas{ background:var(--arena); border-radius:14px; box-shadow:0 12px 36px #000a, inset 0 0 0 1px #0008; touch-action:none; display:block; margin:0 auto; }
+  #countdown { position:absolute; inset:0; display:none; align-items:center; justify-content:center; font-size:72px; font-weight:800; color:white; text-shadow:0 0 8px black; pointer-events:none; }
 
-  /* Overlay (Oyun Sonu) */
+  /* Oyun sonu overlay */
   #overlay{ position:absolute; inset:0; display:none; align-items:center; justify-content:center; pointer-events:auto; }
   #overlay .box{ background:#12161aee; border:1px solid #ffffff22; padding:20px; border-radius:14px; text-align:center; }
   .btn-row{ display:flex; gap:8px; margin-top:10px; justify-content:center; }
-
-  /* Countdown */
-  #countdown { position:absolute; inset:0; display:none; align-items:center; justify-content:center; font-size:72px; font-weight:800; color:white; text-shadow:0 0 8px black; pointer-events:none; }
 
   /* Top100 Modal */
   #hsModal{ position:fixed; inset:0; background:rgba(0,0,0,.7); display:none; align-items:center; justify-content:center; z-index:10; }
@@ -43,10 +41,14 @@
   #hsList .name{ flex:1; text-align:left; font-weight:600; }
   #hsList .score{ width:48px; text-align:left; opacity:.9; }
 
-  /* Tek D-pad (mobil), sadece oyun ekranında */
+  /* Tek D-pad (mobil) — oyun alanının ALTINDA */
   #dpadWrap{
-    display:none; position:absolute; left:50%; transform:translateX(-50%);
-    bottom:18px; z-index:8; user-select:none; touch-action:none;
+    display:none;           /* oyun başlayınca ve mobilde açılacak */
+    margin:12px auto 0;
+    width:100%; max-width:860px;
+    display:flex;           /* JS ile block/flex değiştiriyoruz */
+    justify-content:center;
+    user-select:none; touch-action:none;
   }
   #dpad{
     position:relative; width:180px; height:180px; border-radius:20px;
@@ -71,7 +73,6 @@
     border-radius:50%; background:#ffffff26; border:2px solid #ffffff55;
     transition:transform .08s ease;
   }
-  @media (pointer:coarse){ #dpadWrap{ display:block; } }
   @media (pointer:fine){ #dpadWrap{ display:none !important; } } /* masaüstünde gizle */
 </style>
 </head>
@@ -110,17 +111,17 @@
         <div id="waitInfo" style="opacity:.8; margin-top:6px; display:none;">Rakip bekleniyor...</div>
       </div>
     </div>
+  </div>
 
-    <!-- Tek D-pad sadece oyun ekranında -->
-    <div id="dpadWrap" aria-label="Yön D-Pad">
-      <div id="dpad">
-        <div class="arrow up">▲</div>
-        <div class="arrow down">▼</div>
-        <div class="arrow left">◀</div>
-        <div class="arrow right">▶</div>
-        <div id="ring"></div>
-        <div id="knob"></div>
-      </div>
+  <!-- D-Pad: CANVAS ALTINDA -->
+  <div id="dpadWrap" aria-label="Yön D-Pad">
+    <div id="dpad">
+      <div class="arrow up">▲</div>
+      <div class="arrow down">▼</div>
+      <div class="arrow left">◀</div>
+      <div class="arrow right">▶</div>
+      <div id="ring"></div>
+      <div id="knob"></div>
     </div>
   </div>
 </section>
@@ -137,7 +138,6 @@
 <script src="/socket.io/socket.io.js"></script>
 <script>
 (()=> {
-  // Elements
   const loginScreen=document.getElementById('loginScreen'),
         nicknameInput=document.getElementById('nickname'),
         loginError=document.getElementById('loginError'),
@@ -157,14 +157,14 @@
   const BASE_W=800, BASE_H=600;
   function fitCanvas(){
     const availW=Math.min(window.innerWidth*0.98,1200);
-    const availH=window.innerHeight*0.70; // d-pad'e yer
+    const availH=window.innerHeight*0.70; // altta d-pad için yer
     const scale=Math.min(availW/BASE_W, availH/BASE_H);
     canvas.style.width=(BASE_W*scale)+'px';
     canvas.style.height=(BASE_H*scale)+'px';
   }
   window.addEventListener('resize', fitCanvas); fitCanvas();
 
-  // Socket (websocket zorunlu server ile uyumlu)
+  // Socket (websocket)
   const socket = io({ transports: ['websocket'] });
 
   // Login
@@ -186,8 +186,8 @@
     s1.textContent='0'; s2.textContent='0'; tm.textContent=data.duration;
     fitCanvas();
 
-    // sadece mobilde d-pad göster
-    if (window.matchMedia('(pointer: coarse)').matches) dpadWrap.style.display='block';
+    // sadece mobilde d-pad göster (masaüstünde gizle)
+    if (window.matchMedia('(pointer: coarse)').matches) dpadWrap.style.display='flex';
     else dpadWrap.style.display='none';
 
     startCountdown(()=> socket.emit('countdown_done') );
@@ -224,12 +224,11 @@
       resultText.textContent = st.winner==='p1' ? ('Beyaz Kazandı!') : st.winner==='p2' ? ('Gri Kazandı!') : 'Berabere!';
       resultScore.textContent = `Beyaz: ${st.p1.score} • Gri: ${st.p2.score}`;
       dpadWrap.style.display='none';
-      knob.style.transform='translate(0px,0px)';
-      lastDir='stop';
+      knob.style.transform='translate(0px,0px)'; lastDir='stop';
     }
   });
 
-  // PC klavye: Hem oklar hem WASD → benim yılanım (server rolüne göre uygular)
+  // PC klavye: ok + WASD → sunucu rolüne göre benim yılanım
   document.addEventListener('keydown', (e)=>{
     const dir = keyToDir(e.key);
     if (!dir) return;
@@ -243,7 +242,7 @@
     return null;
   }
 
-  // D-pad tek yüzey (tek parmak)
+  // D-pad tek yüzey
   const ringR=60, knobR=25, dead=8;
   let dragging=false, lastDir='stop';
 
@@ -255,7 +254,7 @@
   window.addEventListener('pointerup', ()=>{
     if(!dragging) return;
     dragging=false; knob.style.transform='translate(0px,0px)';
-    lastDir='stop'; // stop göndermiyoruz; momentum devam
+    lastDir='stop'; // stop göndermiyoruz; mevcut yön devam
   }, {passive:false});
 
   function handlePad(ev){
@@ -305,7 +304,7 @@
 
   function escapeHtml(s){return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
 
-  // Countdown logic
+  // Geri sayım
   function startCountdown(cb){
     let count=3;
     countdown.style.display='flex';
