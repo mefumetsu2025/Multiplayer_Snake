@@ -41,36 +41,27 @@
   #hsList .name{ flex:1; text-align:left; font-weight:600; }
   #hsList .score{ width:48px; text-align:left; opacity:.9; }
 
-  /* === Draggable Joystick (mobile only) === */
-  #joyWrap{
-    display:none; position:fixed; left:16px; bottom:16px; z-index:20;
-    width:160px; user-select:none;
+  /* ---- Mobil yön butonları (sadece oyun ekranında) ---- */
+  #mobileControls{
+    display:none;
+    position:fixed; left:0; right:0; bottom:16px;
+    z-index:8; padding:0 16px;
+    justify-content:space-between; align-items:flex-end;
   }
-  #joyHandle{
-    height:22px; line-height:22px; text-align:center; font-size:14px;
-    color:#cbd5e1; border:1px solid #ffffff22; border-bottom:0; border-radius:12px 12px 0 0;
-    background:#0e1114cc; backdrop-filter: blur(6px); cursor:grab;
+  .ctrl-col{
+    display:flex; flex-direction:column; gap:12px;
   }
-  #joyBase{
-    width:160px; height:160px; border-radius:16px; border:1px solid #ffffff22;
-    background:#0e1114aa; backdrop-filter: blur(6px); position:relative; touch-action:none;
+  .ctrl-row{
+    display:flex; flex-direction:row; gap:12px;
   }
-  #joyRing{
-    position:absolute; left:50%; top:50%;
-    width:120px; height:120px; margin:-60px 0 0 -60px;
-    border-radius:50%; border:1px dashed #ffffff33;
+  .ctrl-btn{
+    width:72px; height:72px; font-size:32px; line-height:72px;
+    background:#ffffff22; color:#fff; border:none; border-radius:14px;
+    box-shadow:0 6px 16px #0006;
   }
-  #joyKnob{
-    position:absolute; left:50%; top:50%;
-    width:64px; height:64px; margin:-32px 0 0 -32px;
-    border-radius:50%;
-    background:#ffffff33; border:2px solid #ffffff55;
-  }
-  @media (pointer:coarse){
-    #joyWrap{ display:block; }
-  }
+  .ctrl-btn:active{ background:#ffffff33; }
   @media (pointer:fine){
-    #joyWrap{ display:none !important; } /* masaüstünde gizle */
+    #mobileControls{ display:none !important; } /* masaüstünde gizle */
   }
 </style>
 </head>
@@ -111,12 +102,15 @@
     </div>
   </div>
 
-  <!-- Mobile Joystick -->
-  <div id="joyWrap">
-    <div id="joyHandle">≡ Joystick</div>
-    <div id="joyBase">
-      <div id="joyRing"></div>
-      <div id="joyKnob"></div>
+  <!-- Mobil Yön Tuşları (sol ↑↓, sağ ←→) -->
+  <div id="mobileControls">
+    <div class="ctrl-col">
+      <button class="ctrl-btn" data-dir="up">▲</button>
+      <button class="ctrl-btn" data-dir="down">▼</button>
+    </div>
+    <div class="ctrl-row">
+      <button class="ctrl-btn" data-dir="left">◀</button>
+      <button class="ctrl-btn" data-dir="right">▶</button>
     </div>
   </div>
 </section>
@@ -133,7 +127,7 @@
 <script src="/socket.io/socket.io.js"></script>
 <script>
 (()=> {
-  // Elements
+  // ---- Elements
   const loginScreen=document.getElementById('loginScreen'),
         nicknameInput=document.getElementById('nickname'),
         loginError=document.getElementById('loginError'),
@@ -144,29 +138,26 @@
         overlay=document.getElementById('overlay'), resultText=document.getElementById('resultText'),
         resultScore=document.getElementById('resultScore'), restartBtn=document.getElementById('restartBtn'),
         newOpponentBtn=document.getElementById('newOpponentBtn'), waitInfo=document.getElementById('waitInfo'),
-        showHSBtn=document.getElementById('showHSBtn'), countdown=document.getElementById('countdown'),
-        hsModal=document.getElementById('hsModal'), hsClose=document.getElementById('hsClose'), hsList=document.getElementById('hsList');
+        showHSBtn=document.getElementById('showHSBtn'),
+        countdown=document.getElementById('countdown'),
+        hsModal=document.getElementById('hsModal'), hsClose=document.getElementById('hsClose'), hsList=document.getElementById('hsList'),
+        mobileControls=document.getElementById('mobileControls');
 
-  // Joystick elements
-  const joyWrap=document.getElementById('joyWrap'),
-        joyHandle=document.getElementById('joyHandle'),
-        joyBase=document.getElementById('joyBase'),
-        joyKnob=document.getElementById('joyKnob');
-
-  // Canvas auto-fit
+  // ---- Canvas auto-fit
   const BASE_W=800, BASE_H=600;
   function fitCanvas(){
     const availW=Math.min(window.innerWidth*0.98,1200);
-    const availH=window.innerHeight*0.70; // joystick için alttan boşluk
+    const availH=window.innerHeight*0.70; // alttaki kontroller için yer
     const scale=Math.min(availW/BASE_W, availH/BASE_H);
     canvas.style.width=(BASE_W*scale)+'px';
     canvas.style.height=(BASE_H*scale)+'px';
   }
   window.addEventListener('resize', fitCanvas); fitCanvas();
 
+  // ---- Socket
   const socket=io();
 
-  // Login
+  // ---- Login
   startBtn.addEventListener('click', ()=>{
     const nick=nicknameInput.value.trim();
     if(!nick){ loginError.textContent='Kullanıcı adı boş olamaz!'; return; }
@@ -176,7 +167,7 @@
   });
   socket.on('nick_error', msg=>loginError.textContent=msg);
 
-  // Match start -> show game, run countdown, then tell server
+  // ---- Match start -> show game + countdown -> notify server
   socket.on('match_start', data=>{
     loginScreen.style.display='none';
     gameScreen.style.display='block';
@@ -185,11 +176,11 @@
     s1.textContent='0'; s2.textContent='0'; tm.textContent=data.duration;
     fitCanvas();
 
-    // sadece mobilde joystick göster
+    // sadece mobilde butonları aç
     if (window.matchMedia('(pointer: coarse)').matches) {
-      joyWrap.style.display='block';
+      mobileControls.style.display='flex';
     } else {
-      joyWrap.style.display='none';
+      mobileControls.style.display='none';
     }
 
     startCountdown(()=>{ socket.emit('countdown_done'); });
@@ -199,39 +190,37 @@
     waitInfo.style.display = (rdy.p1 && rdy.p2) ? 'none' : 'block';
   });
 
-  // Game state
+  // ---- Game state
   socket.on('state', st=>{
     if(!st.over){ tm.textContent=st.left; }
-    s1.textContent=st.p1.score;
-    s2.textContent=st.p2.score;
+    s1.textContent=st.p1.score; s2.textContent=st.p2.score;
 
     const grid=20, W=BASE_W, H=BASE_H;
     ctx.clearRect(0,0,W,H);
+    // sınır
     ctx.save(); ctx.strokeStyle='#ffffff'; ctx.lineWidth=4; ctx.strokeRect(2,2,W-4,H-4); ctx.restore();
-
+    // yemler
     if(st.food){ ctx.fillStyle='red'; ctx.fillRect(st.food.x*grid, st.food.y*grid, grid, grid); }
     if(st.sfood){ ctx.fillStyle='gold'; ctx.fillRect(st.sfood.x*grid, st.sfood.y*grid, grid, grid); }
-
-    // P1: Beyaz
+    // P1 (Beyaz)
     ctx.fillStyle='#fff';
     for(const p of st.p1.body){
       ctx.fillRect(p.x*grid,p.y*grid,grid,grid);
       ctx.strokeStyle='#111'; ctx.lineWidth=1; ctx.strokeRect(p.x*grid+0.5,p.y*grid+0.5,grid-1,grid-1);
     }
-    // P2: Gri
+    // P2 (Gri)
     ctx.fillStyle='#9aa0a6';
-    for(const p of st.p2.body){ ctx.fillRect(p.x*grid,p.y*grid,grid,grid); }
+    for(const p of st.p2.body) ctx.fillRect(p.x*grid,p.y*grid,grid,grid);
 
     if(st.over){
       overlay.style.display='flex';
       resultText.textContent = st.winner==='p1' ? (st.n1+' Kazandı!') : st.winner==='p2' ? (st.n2+' Kazandı!') : 'Berabere!';
       resultScore.textContent = `${st.n1}: ${st.p1.score} • ${st.n2}: ${st.p2.score}`;
-      joyCenter();
-      joyWrap.style.display='none';
+      mobileControls.style.display='none';
     }
   });
 
-  // Keyboard (PC)
+  // ---- Keyboard (PC)
   document.addEventListener('keydown', e=>{
     let dir=null;
     if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key))
@@ -247,74 +236,19 @@
     return {x:0,y:0};
   }
 
-  // ===== Joystick logic (P1 only) =====
-  const ringR = 60;           // ring yarıçap (joyRing 120px)
-  const knobR = 32;           // knob yarıçap
-  const dead = 10;            // ölü bölge
-  let isDragStick=false, isDragPanel=false, lastDir='stop';
-
-  // panel taşıma
-  let startX=0,startY=0,origX=0,origY=0;
-  joyHandle.addEventListener('pointerdown', (ev)=>{
-    isDragPanel=true;
-    const r = joyWrap.getBoundingClientRect();
-    startX=ev.clientX; startY=ev.clientY; origX=r.left; origY=r.top;
-    ev.preventDefault();
+  // ---- Mobile buttons (P1 only)
+  document.querySelectorAll('#mobileControls .ctrl-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const d = btn.dataset.dir;
+      const dir = d==='up' ? {x:0,y:-1}
+                : d==='down' ? {x:0,y:1}
+                : d==='left' ? {x:-1,y:0}
+                : {x:1,y:0};
+      socket.emit('input',{for:'p1', dir});
+    });
   });
-  window.addEventListener('pointermove', (ev)=>{
-    if(!isDragPanel) return;
-    const dx=ev.clientX-startX, dy=ev.clientY-startY;
-    joyWrap.style.left=(origX+dx)+'px';
-    joyWrap.style.top=(origY+dy)+'px';
-    joyWrap.style.right='auto'; joyWrap.style.bottom='auto';
-  });
-  window.addEventListener('pointerup', ()=>{ isDragPanel=false; });
 
-  // stick sürükleme
-  joyBase.addEventListener('pointerdown', (ev)=>{ isDragStick=true; handleJoy(ev); });
-  window.addEventListener('pointermove', (ev)=>{ if(isDragStick) handleJoy(ev); });
-  window.addEventListener('pointerup', ()=>{ if(isDragStick){ isDragStick=false; joyCenter(); sendDir('stop'); } });
-
-  function handleJoy(ev){
-    const br = joyBase.getBoundingClientRect();
-    const cx = br.left + br.width/2;
-    const cy = br.top  + br.height/2;
-    const dx = ev.clientX - cx;
-    const dy = ev.clientY - cy;
-    const dist = Math.hypot(dx,dy);
-    const clamped = Math.min(dist, ringR - knobR/2);
-    const ang = Math.atan2(dy, dx); // -PI..PI
-
-    // knob konumu
-    const kx = Math.cos(ang) * clamped;
-    const ky = Math.sin(ang) * clamped;
-    joyKnob.style.transform = `translate(${kx}px, ${ky}px)`;
-
-    // yön belirleme (4-yön quantize)
-    let dir = 'stop';
-    if (dist > dead){
-      const ax = Math.abs(dx), ay = Math.abs(dy);
-      if (ax > ay) dir = dx>0 ? 'right' : 'left';
-      else         dir = dy>0 ? 'down'  : 'up';
-    }
-    sendDir(dir);
-  }
-
-  function joyCenter(){
-    joyKnob.style.transform = 'translate(0px, 0px)';
-  }
-
-  function sendDir(dir){
-    if (dir === lastDir) return;
-    lastDir = dir;
-    if (dir==='up')    socket.emit('input',{for:'p1', dir:{x:0,y:-1}});
-    if (dir==='down')  socket.emit('input',{for:'p1', dir:{x:0,y: 1}});
-    if (dir==='left')  socket.emit('input',{for:'p1', dir:{x:-1,y:0}});
-    if (dir==='right') socket.emit('input',{for:'p1', dir:{x:1,y:0}});
-    // 'stop' durumunda yön göndermiyoruz (yılan momentumla devam eder)
-  }
-
-  // Rematch / New opponent / Top100
+  // ---- Rematch / New opponent / Top100
   restartBtn.addEventListener('click', ()=>{ waitInfo.style.display='block'; socket.emit('rematch'); });
   newOpponentBtn.addEventListener('click', ()=>{ overlay.style.display='flex'; waitInfo.textContent='Yeni rakip aranıyor...'; waitInfo.style.display='block'; socket.emit('find_new'); });
 
@@ -333,7 +267,7 @@
 
   function escapeHtml(s){return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
 
-  // Countdown logic
+  // ---- Countdown logic
   function startCountdown(cb){
     let count=3;
     countdown.style.display='flex';
