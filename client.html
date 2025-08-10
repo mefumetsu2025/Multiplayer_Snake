@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Multiplayer Snake</title>
 <style>
   :root{ --page:#1a1d1f; --arena:#2a2f34; --panel:#111418; --text:#f5f7fa; --badge:#ffffff14; }
@@ -29,10 +29,12 @@
   .btn-row{ display:flex; gap:8px; margin-top:10px; justify-content:center; }
 
   /* Countdown */
-  #countdown { 
-    position:absolute; inset:0; display:flex; align-items:center; justify-content:center; 
-    font-size:72px; font-weight:800; color:white; text-shadow:0 0 8px black; 
-    pointer-events:none; 
+  #countdown { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:72px; font-weight:800; color:white; text-shadow:0 0 8px black; pointer-events:none; }
+
+  /* Mobile hint */
+  #mobileHint{ display:none; width:min(860px,95vw); margin:8px auto 0; font-size:14px; opacity:.85; text-align:center; }
+  @media (pointer:coarse){
+    #mobileHint{ display:block; }
   }
 
   /* Top100 Modal */
@@ -62,10 +64,12 @@
 <!-- GAME -->
 <section id="gameScreen">
   <div id="hud">
-    <div class="badge">Siyah ⬤ <span id="s1">0</span></div>
+    <div class="badge">Beyaz ⚪ <span id="s1">0</span></div>
     <div class="badge">Süre ⏱ <span id="tm">300</span>s</div>
-    <div class="badge">Gri ⬤ <span id="s2">0</span></div>
+    <div class="badge">Gri ◍ <span id="s2">0</span></div>
   </div>
+
+  <div id="mobileHint">📱 Yönlendirme: <b>Sol yarı = Beyaz</b>, <b>sağ yarı = Gri</b>. Dokunup çekerek yön verin.</div>
 
   <div id="stageWrap">
     <canvas id="gameCanvas" width="800" height="600"></canvas>
@@ -138,9 +142,7 @@
     waitInfo.style.display='none';
     s1.textContent='0'; s2.textContent='0'; tm.textContent=data.duration;
     fitCanvas();
-    startCountdown(()=>{
-      socket.emit('countdown_done');
-    });
+    startCountdown(()=>{ socket.emit('countdown_done'); });
   });
 
   socket.on('rematch_wait', rdy=>{
@@ -148,18 +150,32 @@
   });
 
   socket.on('state', st=>{
-    if(!st.over){ // süreyi sadece oyun devam ederken güncelle
+    if(!st.over){ // oyun bittiyse süreyi güncellemiyoruz
       s1.textContent=st.p1.score;
       s2.textContent=st.p2.score;
       tm.textContent=st.left;
     }
     const grid=20, W=BASE_W, H=BASE_H;
     ctx.clearRect(0,0,W,H);
+
+    // sınır
     ctx.save(); ctx.strokeStyle='#ffffff'; ctx.lineWidth=4; ctx.strokeRect(2,2,W-4,H-4); ctx.restore();
+
+    // yemler
     if(st.food){ ctx.fillStyle='red'; ctx.fillRect(st.food.x*grid, st.food.y*grid, grid, grid); }
     if(st.sfood){ ctx.fillStyle='gold'; ctx.fillRect(st.sfood.x*grid, st.sfood.y*grid, grid, grid); }
-    ctx.fillStyle='black'; for(const p of st.p1.body) ctx.fillRect(p.x*grid,p.y*grid,grid,grid);
-    ctx.fillStyle='grey'; for(const p of st.p2.body) ctx.fillRect(p.x*grid,p.y*grid,grid,grid);
+
+    // BEYAZ yılan (p1) — görünürlüğü artırmak için siyah kontur
+    ctx.fillStyle='#fff';
+    for(const p of st.p1.body){
+      ctx.fillRect(p.x*grid,p.y*grid,grid,grid);
+      ctx.strokeStyle='#111'; ctx.lineWidth=1; ctx.strokeRect(p.x*grid+0.5,p.y*grid+0.5,grid-1,grid-1);
+    }
+
+    // GRİ yılan (p2)
+    ctx.fillStyle='#9aa0a6';
+    for(const p of st.p2.body) ctx.fillRect(p.x*grid,p.y*grid,grid,grid);
+
     if(st.over){
       overlay.style.display='flex';
       resultText.textContent = st.winner==='p1' ? (st.n1+' Kazandı!') : st.winner==='p2' ? (st.n2+' Kazandı!') : 'Berabere!';
@@ -170,9 +186,9 @@
   document.addEventListener('keydown', e=>{
     let dir=null;
     if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key))
-      dir=keyToDir(e.key), socket.emit('input',{for:'p1', dir});
+      dir=keyToDir(e.key), socket.emit('input',{for:'p1', dir});   // Beyaz
     else if(['w','a','s','d'].includes(e.key))
-      dir=keyToDir(e.key), socket.emit('input',{for:'p2', dir});
+      dir=keyToDir(e.key), socket.emit('input',{for:'p2', dir});   // Gri
   });
   function keyToDir(key){
     if(key==='ArrowUp'||key==='w') return {x:0,y:-1};
@@ -181,12 +197,14 @@
     if(key==='ArrowRight'||key==='d') return {x:1,y:0};
     return {x:0,y:0};
   }
+
+  // Mobil dokunma: sol yarı Beyaz, sağ yarı Gri (en basit ve kullanışlı)
   function handleTouch(e){
     e.preventDefault();
     const r=canvas.getBoundingClientRect();
     for(let i=0;i<e.touches.length;i++){
       const t=e.touches[i], x=t.clientX-r.left, y=t.clientY-r.top;
-      const left=x<r.width/2;
+      const left=x<r.width/2; // sol = Beyaz (p1), sağ = Gri (p2)
       const cx=left ? r.width*0.25 : r.width*0.75, cy=r.height*0.5;
       const dx=x-cx, dy=y-cy;
       const dir=Math.abs(dx)>Math.abs(dy) ? {x:dx>0?1:-1,y:0} : {x:0,y:dy>0?1:-1};
