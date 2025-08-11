@@ -2,77 +2,61 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
 <title>Multiplayer Snake</title>
 <style>
-  :root{ --page:#1a1d1f; --arena:#2a2f34; --panel:#111418; --text:#f5f7fa; --badge:#ffffff14; }
-  *{ box-sizing:border-box }
-  body{ margin:0; background:var(--page); color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; }
+  :root{
+    --page:#1a1d1f; --arena:#2a2f34; --panel:#0f1316; --text:#f5f7fa; --muted:#ffffff29; --accent:#e9ebef;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--page);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+  body.playing{overflow:hidden}
 
-  /* Login */
-  #loginScreen{ min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; padding:16px; }
-  #loginCard{ width:min(440px,92vw); background:#0f1316; border:1px solid #ffffff22; border-radius:14px; box-shadow:0 10px 28px #0008; padding:22px; text-align:center; }
-  #loginCard h2{ margin:0 0 12px }
-  .fld{ width:100%; padding:12px 14px; border-radius:10px; border:1px solid #ffffff22; background:#11161a; color:#fff; font-size:16px; }
-  .fld::placeholder{ color:#9aa4ad }
-  .btn{ width:100%; padding:12px 14px; border-radius:10px; border:0; background:#e9ebef; color:#111; font-weight:700; cursor:pointer; }
-  .error{ color:#ff6b6b; font-size:14px; min-height:18px; margin-top:6px; }
+  /* LOGIN */
+  #loginScreen{min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:16px}
+  #loginCard{width:min(440px,92vw);background:var(--panel);border:1px solid #ffffff22;border-radius:14px;box-shadow:0 10px 28px #0007;padding:22px;text-align:center}
+  #loginCard h2{margin:0 0 12px}
+  .fld{width:100%;padding:12px 14px;border-radius:10px;border:1px solid #ffffff22;background:#0e1114;color:#fff;font-size:16px}
+  .btn{width:100%;padding:12px 14px;border-radius:10px;border:0;background:var(--accent);color:#111;font-weight:700;cursor:pointer}
+  .error{color:#ff6b6b;font-size:14px;min-height:18px;margin-top:6px}
 
-  /* Game */
-  #gameScreen{ display:none; padding:12px 16px 24px }
-  #hud{ width:min(860px,95vw); margin:0 auto 10px; background:#111418; border-radius:12px; padding:10px 14px; box-shadow:0 6px 24px #0006; display:flex; justify-content:center; gap:10px; font-weight:700; }
-  .badge{ padding:6px 10px; border-radius:10px; background:#ffffff14; }
-  #stageWrap{ position:relative; width:100%; display:flex; flex-direction:column; align-items:center; }
-  #gameCanvas{ background:var(--arena); border-radius:14px; box-shadow:0 12px 36px #000a, inset 0 0 0 1px #0008; touch-action:none; display:block; margin:0 auto; }
-  #countdown { position:absolute; inset:0; display:none; align-items:center; justify-content:center; font-size:72px; font-weight:800; color:white; text-shadow:0 0 8px black; pointer-events:none; }
+  /* GAME */
+  #gameScreen{display:none;min-height:100dvh;padding:12px 16px}
+  #hud{width:min(900px,96vw);margin:0 auto 8px;background:#101418;border:1px solid #ffffff1f;border-radius:12px;padding:8px 10px;box-shadow:0 8px 24px #0006;display:flex;justify-content:center;gap:8px;font-weight:700}
+  .badge{padding:6px 10px;border-radius:10px;background:var(--muted)}
+  #stageWrap{position:relative;width:100%;display:flex;justify-content:center}
+  #gameCanvas{background:var(--arena);border-radius:14px;box-shadow:0 12px 36px #000a, inset 0 0 0 1px #0008;touch-action:none;display:block;margin:0 auto}
 
-  /* Oyun sonu overlay */
-  #overlay{ position:absolute; inset:0; display:none; align-items:center; justify-content:center; pointer-events:auto; }
-  #overlay .box{ background:#12161aee; border:1px solid #ffffff22; padding:20px; border-radius:14px; text-align:center; }
-  .btn-row{ display:flex; gap:8px; margin-top:10px; justify-content:center; }
+  /* Overlay (sonuç + geri sayım) */
+  #overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;pointer-events:auto}
+  #overlay .box{background:#12161add;border:1px solid #ffffff22;padding:22px 18px;border-radius:14px;text-align:center;min-width:min(420px,92vw)}
+  .btn-row{display:flex;gap:8px;margin-top:10px;justify-content:center}
+  .btn-s{padding:10px 12px;border-radius:10px;border:0;background:#e9ebef;color:#111;font-weight:700;cursor:pointer}
+
+  /* D-Pad */
+  #dpadWrap{display:none;justify-content:center;margin:10px auto 6px;width:min(900px,96vw)}
+  .dpad{
+    display:grid;grid-template-columns:80px 80px 80px;grid-template-rows:80px 80px 80px;gap:10px;
+    touch-action:none;
+  }
+  .dkey{
+    background:#0e1114;border:1px solid #ffffff22;border-radius:14px;color:#fff;font-size:22px;
+    display:flex;align-items:center;justify-content:center;user-select:none;box-shadow:0 6px 16px #0008;
+  }
+  .dkey:active{transform:scale(.98)}
+  .dkey span{pointer-events:none}
+  .dpad .empty{background:transparent;border:0;box-shadow:none}
 
   /* Top100 Modal */
-  #hsModal{ position:fixed; inset:0; background:rgba(0,0,0,.7); display:none; align-items:center; justify-content:center; z-index:10; }
-  #hsPanel{ position:relative; width:min(720px,92vw); max-height:80vh; overflow:auto; background:#0e1114; border:1px solid #ffffff22; border-radius:14px; box-shadow:0 10px 30px #000a; padding:14px 16px; }
-  #hsClose{ position:absolute; top:8px; right:10px; border:0; background:transparent; color:#fff; font-size:22px; cursor:pointer; }
-  #hsList{ list-style:none; padding-left:0; margin:0; }
-  #hsList li{ display:flex; align-items:center; gap:8px; padding:3px 0; }
-  #hsList .rank{ width:26px; text-align:right; opacity:.85; }
-  #hsList .name{ flex:1; text-align:left; font-weight:600; }
-  #hsList .score{ width:48px; text-align:left; opacity:.9; }
-
-  /* Tek D-pad (mobil) — canvas ALTINDA, daha büyük */
-  #dpadWrap{
-    display:none;
-    margin:14px auto 0;
-    width:100%; max-width:860px;
-    display:flex; justify-content:center;
-    user-select:none; touch-action:none;
-  }
-  #dpad{
-    position:relative; width:220px; height:220px; border-radius:22px;
-    background:#0e1114b0; border:1px solid #ffffff22; backdrop-filter:blur(6px);
-    box-shadow:0 8px 24px #0008;
-  }
-  .arrow{
-    position:absolute; display:flex; align-items:center; justify-content:center;
-    color:#e9eef5; font-weight:800; font-size:28px; opacity:.95;
-    background:#ffffff22; border:1px solid #ffffff33; border-radius:14px;
-  }
-  .arrow.up{    left:86px; top:12px;    width:56px; height:68px; }
-  .arrow.down{  left:86px; bottom:12px; width:56px; height:68px; }
-  .arrow.left{  top:86px; left:12px;   width:68px; height:56px; }
-  .arrow.right{ top:86px; right:12px;  width:68px; height:56px; }
-  #ring{
-    position:absolute; left:50%; top:50%; width:150px; height:150px; margin:-75px 0 0 -75px;
-    border-radius:50%; border:1px dashed #ffffff30;
-  }
-  #knob{
-    position:absolute; left:50%; top:50%; width:60px; height:60px; margin:-30px 0 0 -30px;
-    border-radius:50%; background:#ffffff26; border:2px solid #ffffff55;
-    transition:transform .08s ease;
-  }
-  @media (pointer:fine){ #dpadWrap{ display:none !important; } }
+  #hsModal{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:20}
+  #hsPanel{position:relative;width:min(720px,92vw);max-height:80vh;overflow:auto;background:#0e1114;border:1px solid #ffffff22;border-radius:14px;box-shadow:0 10px 30px #000a;padding:14px 16px}
+  #hsClose{position:absolute;top:8px;right:10px;border:0;background:transparent;color:#fff;font-size:22px;cursor:pointer}
+  #hsList{list-style:none;padding-left:0;margin:0}
+  #hsList li{display:flex;align-items:center;gap:8px;padding:4px 0}
+  #hsList .rank{width:28px;text-align:right;opacity:.85}
+  #hsList .name{flex:1;text-align:left;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #hsList .score{width:56px;text-align:left;opacity:.9}
 </style>
 </head>
 <body>
@@ -81,46 +65,49 @@
 <section id="loginScreen">
   <div id="loginCard">
     <h2>Multiplayer Snake</h2>
-    <input id="nickname" class="fld" type="text" placeholder="Kullanıcı adı (max 15)" maxlength="15">
+    <input id="nickname" class="fld" placeholder="Kullanıcı adı (max 15)" maxlength="15" />
     <div id="loginError" class="error"></div>
     <button id="startBtn" class="btn">Oyuna Başla</button>
+    <div style="opacity:.8;margin-top:8px;font-size:14px">Uygunsuz/müstehcen adlar engellenir. (Aynı IP aynı adı tekrar kullanabilir)</div>
   </div>
 </section>
 
 <!-- GAME -->
 <section id="gameScreen">
   <div id="hud">
-    <div class="badge">Beyaz ⚪ <span id="s1">0</span></div>
+    <div class="badge">Beyaz ⬤ <span id="s1">0</span></div>
     <div class="badge">Süre ⏱ <span id="tm">300</span>s</div>
-    <div class="badge">Gri ◍ <span id="s2">0</span></div>
+    <div class="badge">Gri ⬤ <span id="s2">0</span></div>
   </div>
 
   <div id="stageWrap">
     <canvas id="gameCanvas" width="800" height="600"></canvas>
-    <div id="countdown"></div>
+
     <div id="overlay">
       <div class="box">
-        <h2 id="resultText">Sonuç</h2>
-        <div id="resultScore" style="opacity:.85; margin-bottom:8px;"></div>
+        <h2 id="countdown" style="margin-top:0;display:none;font-size:42px">3</h2>
+        <h2 id="resultText" style="margin-top:0">Sonuç</h2>
+        <div id="resultScore" style="opacity:.85;margin-bottom:8px"></div>
         <div class="btn-row">
-          <button id="restartBtn" class="btn">Yeniden Oyna</button>
-          <button id="newOpponentBtn" class="btn">Yeni Rakip Bul</button>
-          <button id="showHSBtn" class="btn">Top 100'ü Gör</button>
+          <button id="restartBtn" class="btn-s">Yeniden Oyna</button>
+          <button id="newOpponentBtn" class="btn-s">Yeni Rakip Bul</button>
+          <button id="showHSBtn" class="btn-s">Top 100'ü Gör</button>
         </div>
-        <div id="waitInfo" style="opacity:.8; margin-top:6px; display:none;">Rakip bekleniyor...</div>
+        <div id="waitInfo" style="opacity:.8;margin-top:6px;display:none">Rakip bekleniyor...</div>
       </div>
     </div>
   </div>
 
-  <!-- D-Pad -->
-  <div id="dpadWrap" aria-label="Yön D-Pad">
-    <div id="dpad">
-      <div class="arrow up">▲</div>
-      <div class="arrow down">▼</div>
-      <div class="arrow left">◀</div>
-      <div class="arrow right">▶</div>
-      <div id="ring"></div>
-      <div id="knob"></div>
+  <!-- Tek parça büyük D-pad -->
+  <div id="dpadWrap">
+    <div class="dpad" id="dpad">
+      <div class="empty"></div>
+      <div class="dkey" data-dir="up"><span>▲</span></div>
+      <div class="empty"></div>
+      <div class="dkey" data-dir="left"><span>◀</span></div>
+      <div class="dkey" data-dir="down"><span>▼</span></div>
+      <div class="dkey" data-dir="right"><span>▶</span></div>
+      <div class="empty"></div><div class="empty"></div><div class="empty"></div>
     </div>
   </div>
 </section>
@@ -129,198 +116,197 @@
 <div id="hsModal">
   <div id="hsPanel">
     <button id="hsClose" title="Kapat">×</button>
-    <h3 style="margin:0 0 8px;">Top 100</h3>
+    <h3 style="margin:0 0 8px">Top 100</h3>
     <ol id="hsList"></ol>
   </div>
 </div>
 
+<!-- Socket.IO -->
 <script src="/socket.io/socket.io.js"></script>
 <script>
 (()=> {
-  const loginScreen=document.getElementById('loginScreen'),
-        nicknameInput=document.getElementById('nickname'),
-        loginError=document.getElementById('loginError'),
-        startBtn=document.getElementById('startBtn'),
-        gameScreen=document.getElementById('gameScreen'),
-        s1=document.getElementById('s1'), s2=document.getElementById('s2'), tm=document.getElementById('tm'),
-        canvas=document.getElementById('gameCanvas'), ctx=canvas.getContext('2d'),
-        overlay=document.getElementById('overlay'), resultText=document.getElementById('resultText'),
-        resultScore=document.getElementById('resultScore'), restartBtn=document.getElementById('restartBtn'),
-        newOpponentBtn=document.getElementById('newOpponentBtn'), waitInfo=document.getElementById('waitInfo'),
-        showHSBtn=document.getElementById('showHSBtn'),
-        countdown=document.getElementById('countdown'),
-        hsModal=document.getElementById('hsModal'), hsClose=document.getElementById('hsClose'), hsList=document.getElementById('hsList'),
-        dpadWrap=document.getElementById('dpadWrap'), dpad=document.getElementById('dpad'),
-        knob=document.getElementById('knob');
+  /* --------- ELements --------- */
+  const loginScreen = document.getElementById('loginScreen');
+  const nicknameInput = document.getElementById('nickname');
+  const loginError = document.getElementById('loginError');
+  const startBtn = document.getElementById('startBtn');
 
+  const gameScreen = document.getElementById('gameScreen');
+  const s1 = document.getElementById('s1'), s2 = document.getElementById('s2'), tm = document.getElementById('tm');
+  const canvas = document.getElementById('gameCanvas'); const ctx = canvas.getContext('2d');
+  const overlay = document.getElementById('overlay');
+  const resultText = document.getElementById('resultText'); const resultScore = document.getElementById('resultScore');
+  const restartBtn = document.getElementById('restartBtn'); const newOpponentBtn = document.getElementById('newOpponentBtn');
+  const waitInfo = document.getElementById('waitInfo'); const countdownEl = document.getElementById('countdown');
+
+  const hsModal = document.getElementById('hsModal'); const hsClose = document.getElementById('hsClose'); const hsList = document.getElementById('hsList');
+  const showHSBtn = document.getElementById('showHSBtn');
+
+  const dpadWrap = document.getElementById('dpadWrap'); const dpad = document.getElementById('dpad');
+
+  /* --------- Canvas Fit (DPR aware) --------- */
   const BASE_W=800, BASE_H=600;
   function fitCanvas(){
-    const availW=Math.min(window.innerWidth*0.98,1200);
-    const availH=window.innerHeight*0.68; // daha fazla alan, altta büyük d-pad var
-    const scale=Math.min(availW/BASE_W, availH/BASE_H);
-    canvas.style.width=(BASE_W*scale)+'px';
-    canvas.style.height=(BASE_H*scale)+'px';
+    const hudH = document.getElementById('hud').getBoundingClientRect().height || 0;
+    const dpadH = (dpadWrap.style.display!=='none') ? (dpadWrap.getBoundingClientRect().height||0) : 0;
+    const availW = Math.min(window.innerWidth * 0.98, 1400);
+    const availH = Math.max(240, window.innerHeight - hudH - dpadH - 24);
+    const scale = Math.min(availW/BASE_W, availH/BASE_H);
+    const cssW = Math.round(BASE_W * scale), cssH = Math.round(BASE_H * scale);
+    const dpr = window.devicePixelRatio || 1;
+
+    canvas.width  = Math.round(cssW * dpr);
+    canvas.height = Math.round(cssH * dpr);
+    canvas.style.width  = cssW+'px';
+    canvas.style.height = cssH+'px';
+    ctx.setTransform(dpr,0,0,dpr,0,0);
   }
-  window.addEventListener('resize', fitCanvas, {passive:true}); fitCanvas();
+  window.addEventListener('resize', fitCanvas, {passive:true});
 
-  const socket = io({ transports: ['websocket'] });
+  /* --------- Socket: websocket only --------- */
+  const socket = io({ transports: ['websocket'], upgrade: false });
 
+  /* --------- Login --------- */
   startBtn.addEventListener('click', ()=>{
-    const nick=nicknameInput.value.trim();
-    if(!nick){ loginError.textContent='Kullanıcı adı boş olamaz!'; return; }
-    if(nick.length>15){ loginError.textContent='Kullanıcı adı en fazla 15 karakter olabilir.'; return; }
+    const nick = nicknameInput.value.trim();
+    if (!nick){ loginError.textContent='Kullanıcı adı boş olamaz!'; return; }
+    if (nick.length>15){ loginError.textContent='Kullanıcı adı en fazla 15 karakter olabilir.'; return; }
     loginError.textContent='';
     socket.emit('set_nick', nick);
   });
-  socket.on('nick_error', msg=>loginError.textContent=msg);
+  socket.on('nick_error', msg=> loginError.textContent = msg);
 
+  /* --------- Render loop (RAF) --------- */
+  let latestState = null;
+  function draw(st){
+    const grid=20, W=BASE_W, H=BASE_H;
+    ctx.clearRect(0,0,W,H);
+
+    // çerçeve
+    ctx.save(); ctx.strokeStyle='#ffffff'; ctx.lineWidth=4; ctx.strokeRect(2,2,W-4,H-4); ctx.restore();
+
+    // yemler
+    if(st.food){ ctx.fillStyle='red'; ctx.fillRect(st.food.x*grid, st.food.y*grid, grid, grid); }
+    if(st.sfood){ ctx.fillStyle='gold'; ctx.fillRect(st.sfood.x*grid, st.sfood.y*grid, grid, grid); }
+
+    // P1 beyaz
+    ctx.fillStyle='#fff';
+    for(const p of st.p1.body){
+      ctx.fillRect(p.x*grid,p.y*grid,grid,grid);
+      ctx.strokeStyle='#111'; ctx.lineWidth=1; ctx.strokeRect(p.x*grid+0.5,p.y*grid+0.5,grid-1,grid-1);
+    }
+    // P2 gri
+    ctx.fillStyle='#9aa0a6';
+    for(const p of st.p2.body) ctx.fillRect(p.x*grid,p.y*grid,grid,grid);
+
+    if(st.over){
+      let title='Berabere!';
+      if(st.winner==='p1') title=(st.n1||'Oyuncu 1')+' Kazandı!';
+      else if(st.winner==='p2') title=(st.n2||'Oyuncu 2')+' Kazandı!';
+      resultText.textContent = title;
+      resultScore.textContent = `${st.n1}: ${st.p1.score} • ${st.n2}: ${st.p2.score}`;
+      dpadWrap.style.display='none';
+      overlay.style.display='flex';
+      document.body.classList.remove('playing');
+    }
+  }
+  (function renderLoop(){ if (latestState) draw(latestState); requestAnimationFrame(renderLoop); })();
+
+  /* --------- Socket events --------- */
   socket.on('match_start', data=>{
+    document.body.classList.add('playing');
     loginScreen.style.display='none';
     gameScreen.style.display='block';
     overlay.style.display='none';
     waitInfo.style.display='none';
-    s1.textContent='0'; s2.textContent='0'; tm.textContent=data.duration;
-    fitCanvas();
+    resultText.textContent='Sonuç';
+    resultScore.textContent='';
+    latestState=null; s1.textContent='0'; s2.textContent='0'; tm.textContent=data.duration;
+
+    // mobilde D-pad aç
     if (window.matchMedia('(pointer: coarse)').matches) dpadWrap.style.display='flex';
     else dpadWrap.style.display='none';
-    startCountdown(()=> socket.emit('countdown_done') );
+
+    fitCanvas();
+    startCountdown(()=> socket.emit('countdown_done'));
+    setTimeout(()=> socket.emit('countdown_done'), 2000); // güvenlik ağı
+  });
+
+  socket.on('state', st=>{
+    latestState = st;
+    if(!st.over) tm.textContent = st.left;
+    s1.textContent = st.p1.score; s2.textContent = st.p2.score;
   });
 
   socket.on('rematch_wait', rdy=>{
     waitInfo.style.display = (rdy.p1 && rdy.p2) ? 'none' : 'block';
   });
 
-  socket.on('state', st=>{
-    if(!st.over){ tm.textContent=st.left; }
-    s1.textContent=st.p1.score; s2.textContent=st.p2.score;
+  /* --------- Countdown --------- */
+  function startCountdown(onDone){
+    overlay.style.display='flex';
+    countdownEl.style.display='block';
+    resultText.style.display='none';
+    resultScore.style.display='none';
+    let n=3; countdownEl.textContent=n;
+    const t = setInterval(()=>{
+      n--; if(n<=0){ clearInterval(t);
+        overlay.style.display='none';
+        countdownEl.style.display='none';
+        resultText.style.display='block';
+        resultScore.style.display='block';
+        if (onDone) onDone();
+      } else countdownEl.textContent=n;
+    }, 700);
+  }
 
-    const grid=20, W=BASE_W, H=BASE_H;
-    ctx.clearRect(0,0,W,H);
-    ctx.save(); ctx.strokeStyle='#ffffff'; ctx.lineWidth=4; ctx.strokeRect(2,2,W-4,H-4); ctx.restore();
+  /* --------- Controls --------- */
+  function sendDir(dir){ socket.emit('input',{dir}); }
 
-    if(st.food){ ctx.fillStyle='red'; ctx.fillRect(st.food.x*grid, st.food.y*grid, grid, grid); }
-    if(st.sfood){ ctx.fillStyle='gold'; ctx.fillRect(st.sfood.x*grid, st.sfood.y*grid, grid, grid); }
-
-    // P1 (Beyaz)
-    ctx.fillStyle='#fff';
-    for(const p of st.p1.body){
-      ctx.fillRect(p.x*grid,p.y*grid,grid,grid);
-      ctx.strokeStyle='#111'; ctx.lineWidth=1; ctx.strokeRect(p.x*grid+0.5,p.y*grid+0.5,grid-1,grid-1);
-    }
-    // P2 (Gri)
-    ctx.fillStyle='#9aa0a6';
-    for(const p of st.p2.body) ctx.fillRect(p.x*grid,p.y*grid,grid,grid);
-
-    if(st.over){
-      let title = 'Berabere!';
-      if (st.winner==='p1') title = (st.n1||'Oyuncu 1') + ' Kazandı!';
-      else if (st.winner==='p2') title = (st.n2||'Oyuncu 2') + ' Kazandı!';
-      resultText.textContent = title;
-      resultScore.textContent = `${st.n1}: ${st.p1.score} • ${st.n2}: ${st.p2.score}`;
-      dpadWrap.style.display='none';
-      knob.style.transform='translate(0px,0px)';
-      overlay.style.display='flex';
-    }
-  });
-
-  // Klavye: ok + WASD
+  // Klavye (ok + WASD)
   document.addEventListener('keydown', (e)=>{
-    const dir = keyToDir(e.key);
-    if (!dir) return;
-    socket.emit('input', { dir });
+    let d=null;
+    if (e.key==='ArrowUp'||e.key==='w') d={x:0,y:-1};
+    else if (e.key==='ArrowDown'||e.key==='s') d={x:0,y:1};
+    else if (e.key==='ArrowLeft'||e.key==='a') d={x:-1,y:0};
+    else if (e.key==='ArrowRight'||e.key==='d') d={x:1,y:0};
+    if (d){ e.preventDefault(); sendDir(d); }
   });
-  function keyToDir(key){
-    if (key==='ArrowUp'   || key==='w' || key==='W') return {x:0,y:-1};
-    if (key==='ArrowDown' || key==='s' || key==='S') return {x:0,y: 1};
-    if (key==='ArrowLeft' || key==='a' || key==='A') return {x:-1,y:0};
-    if (key==='ArrowRight'|| key==='d' || key==='D') return {x:1,y:0};
-    return null;
+
+  // D-pad
+  function mapDir(name){
+    return name==='up'?{x:0,y:-1}:name==='down'?{x:0,y:1}:name==='left'?{x:-1,y:0}:{x:1,y:0};
   }
-
-  /* ---- D-pad: hem TAP (dokun-bırak) hem SÜRÜKLE ---- */
-  const ringR=75, knobR=30, dead=10;
-  let dragging=false, lastDir='stop';
-
-  // Tap (ok butonlarına bas)
-  document.querySelector('.arrow.up').addEventListener('touchstart', e=>{ e.preventDefault(); socket.emit('input',{dir:{x:0,y:-1}}); }, {passive:false});
-  document.querySelector('.arrow.down').addEventListener('touchstart', e=>{ e.preventDefault(); socket.emit('input',{dir:{x:0,y: 1}}); }, {passive:false});
-  document.querySelector('.arrow.left').addEventListener('touchstart', e=>{ e.preventDefault(); socket.emit('input',{dir:{x:-1,y:0}}); }, {passive:false});
-  document.querySelector('.arrow.right').addEventListener('touchstart', e=>{ e.preventDefault(); socket.emit('input',{dir:{x:1,y:0}}); }, {passive:false});
-
-  // Click desteği (tablet/karma aygıtlar)
-  document.querySelector('.arrow.up').addEventListener('click', ()=> socket.emit('input',{dir:{x:0,y:-1}}));
-  document.querySelector('.arrow.down').addEventListener('click', ()=> socket.emit('input',{dir:{x:0,y: 1}}));
-  document.querySelector('.arrow.left').addEventListener('click', ()=> socket.emit('input',{dir:{x:-1,y:0}}));
-  document.querySelector('.arrow.right').addEventListener('click', ()=> socket.emit('input',{dir:{x:1,y:0}}));
-
-  // Sürükleyerek yön verme
-  dpad.addEventListener('pointerdown', (ev)=>{
-    dragging=true; dpad.setPointerCapture?.(ev.pointerId);
-    handlePad(ev); ev.preventDefault();
-  }, {passive:false});
-  window.addEventListener('pointermove', (ev)=>{ if(dragging) handlePad(ev); }, {passive:false});
-  window.addEventListener('pointerup', ()=>{
-    if(!dragging) return;
-    dragging=false; knob.style.transform='translate(0px,0px)';
-    lastDir='stop';
-  }, {passive:false});
-
-  function handlePad(ev){
-    const br=dpad.getBoundingClientRect();
-    const cx=br.left+br.width/2, cy=br.top+br.height/2;
-    const dx=ev.clientX-cx, dy=ev.clientY-cy;
-    const ax=Math.abs(dx), ay=Math.abs(dy);
-    const dist=Math.hypot(dx,dy);
-
-    const max = ringR - knobR*0.6;
-    const ang = Math.atan2(dy,dx);
-    const clamp = Math.min(dist,max);
-    knob.style.transform=`translate(${Math.cos(ang)*clamp}px,${Math.sin(ang)*clamp}px)`;
-
-    let dir='stop';
-    if (dist>dead){
-      if (ax>ay) dir = dx>0 ? 'right' : 'left';
-      else       dir = dy>0 ? 'down'  : 'up';
-    }
-    if (dir!==lastDir){
-      lastDir=dir;
-      if(dir==='up')    socket.emit('input',{dir:{x:0,y:-1}});
-      if(dir==='down')  socket.emit('input',{dir:{x:0,y: 1}});
-      if(dir==='left')  socket.emit('input',{dir:{x:-1,y:0}});
-      if(dir==='right') socket.emit('input',{dir:{x:1,y:0}});
-    }
+  function bindPad(el){
+    const dir = el.dataset.dir;
+    const down = (ev)=>{ ev.preventDefault(); sendDir(mapDir(dir)); };
+    el.addEventListener('touchstart', down, {passive:false});
+    el.addEventListener('mousedown', down);
   }
+  dpad.querySelectorAll('.dkey').forEach(bindPad);
+
+  // Çift dokunma zoom engeli
+  let lastTouch=0;
+  window.addEventListener('touchend', (e)=>{ const now=Date.now(); if (now-lastTouch<300) e.preventDefault(); lastTouch=now; }, {passive:false});
 
   // Rematch / Yeni rakip / Top100
   restartBtn.addEventListener('click', ()=>{ waitInfo.style.display='block'; socket.emit('rematch'); });
   newOpponentBtn.addEventListener('click', ()=>{ overlay.style.display='flex'; waitInfo.textContent='Yeni rakip aranıyor...'; waitInfo.style.display='block'; socket.emit('find_new'); });
+  showHSBtn.addEventListener('click', async ()=>{ await refreshHS(); hsModal.style.display='flex'; });
+  hsClose.addEventListener('click', ()=> hsModal.style.display='none');
+  hsModal.addEventListener('click', (e)=>{ if(e.target===hsModal) hsModal.style.display='none'; });
 
-  showHSBtn.addEventListener('click', async()=>{
+  async function refreshHS(){
     try{
-      const res=await fetch('/highscores');
-      const data=await res.json();
-      hsList.innerHTML=data.map((r,i)=>(
-        `<li><span class="rank">${i+1}.</span><span class="name">${escapeHtml(r.nick)}</span><span class="score">${r.score}</span></li>`
+      const res = await fetch('/highscores');
+      const data = await res.json();
+      hsList.innerHTML = data.map((r,i)=>(
+        `<li><span class="rank">${i+1}.</span><span class="name">${esc(r.nick)}</span><span class="score">${r.score}</span></li>`
       )).join('');
-      hsModal.style.display='flex';
     }catch(e){}
-  });
-  hsClose.addEventListener('click', ()=>hsModal.style.display='none');
-  hsModal.addEventListener('click', e=>{ if(e.target===hsModal) hsModal.style.display='none'; });
-
-  function escapeHtml(s){return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
-
-  function startCountdown(cb){
-    let count=3;
-    countdown.style.display='flex';
-    countdown.textContent=count;
-    const int=setInterval(()=>{
-      count--;
-      if(count>0) countdown.textContent=count;
-      else if(count===0) countdown.textContent='Başla!';
-      else{ clearInterval(int); countdown.style.display='none'; cb(); }
-    },1000);
   }
+  function esc(s){return String(s).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));}
+
 })();
 </script>
 </body>
